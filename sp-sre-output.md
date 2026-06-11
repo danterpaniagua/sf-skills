@@ -10,15 +10,12 @@ Produce formatted outputs (emails, reports, Jira tickets) for different audience
 - Reports for PMs: clear, non-technical language.
 - Never use language that implies authority over the recipient.
 
-## SQL Queries in Tickets
+## Trace Data
 
-All SQL queries run during an investigation or fix must be saved to a `.sql` file in the event subfolder (`YYYYMMDD_description_scripts.sql`). The ticket body references the file with a brief description table — no inline SQL blocks:
-
-| # | Query | Propósito |
-|---|---|---|
-| Q1 | Short name | One-line description of what the query does |
-
-For DBA investigations, trace query text comes from `PNSSRL_AuditSysprocesses.comando_ejecutado` and `PNSSRL_TempdbProc.Query_Text` — save those to `YYYYMMDD_description_queryXXX.sql` as named in `dba-investigation`.
+Always include trace data in Operations Jira tickets:
+- Store the full captured query text as a `.sql` file inside the issue subfolder (`events/YYYYMMDD_description/`).
+- Reference it by filename in the Jira ticket.
+- Source columns: `PNSSRL_AuditSysprocesses.comando_ejecutado`, `PNSSRL_TempdbProc.Query_Text`.
 
 ## Emails to Operations
 
