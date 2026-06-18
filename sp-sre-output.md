@@ -20,6 +20,29 @@ Produce formatted outputs (Jira tickets, emails, reports) for SmartPedidos incid
 | Emails to PMs | Spanish or English — match what the user requests |
 | Findings files (`docs/*-findings.md`) | English |
 
+## Event Folder Layout
+
+Each ticket lives in `docs/jira/dd-mm-yyyy_<small_title>/`. Every incident ticket produces at minimum two files:
+
+| File | Purpose |
+|---|---|
+| `ticket.md` | Main ticket — written in Spanish |
+| `ops-events.md` | Running activity log — append-only work journal |
+
+Additional files as needed: `scripts.sh`, `scripts.js`, `email_ops.md`, `email_pm.md`.
+
+## Ops Events File (`ops-events.md`)
+
+Append-only work journal. One entry per meaningful action: investigation step, finding, remediation applied, status update, or follow-up. Never edit past entries.
+
+```markdown
+# Eventos — dd-mm-yyyy_<small_title>
+
+## YYYY-MM-DD HH:MM — <título corto>
+
+Descripción del trabajo realizado, hallazgo o estado.
+```
+
 ## Jira Ticket Structure
 
 All tickets go in `docs/jira/dd-mm-yyyy_<small_title>/ticket.md`. Written in Spanish.
@@ -62,15 +85,43 @@ Use exactly these sections in this order:
 
 Use exactly these sections in this order:
 
-**Descripción** — one paragraph: what happened, when, which service and collection affected.
+**Resumen** — one paragraph: what happened, when, which service and collection affected.
 
-**Evidencia** — table with columns `Fuente` and `Detalle`. Reference log entries, MongoDB collection names, SQS queue names, or error messages. No inline code blocks — reference findings files.
+**Tabla resumen** — key event metadata:
 
-**Impacto** — table with columns `Componente` and `Impacto`. Services: `platforms-service`, `concentrador-service`. Collections: `orders`, `news`, `logerrors`, `deadletters`.
+| Campo | Valor |
+|---|---|
+| ID alerta | |
+| Sistema | |
+| Severidad | |
+| Detectado | |
+| Resuelto | |
+| Responsable | |
 
 **Causa raíz** — one paragraph.
 
+**Hallazgos** — table of findings. Reference log entries, MongoDB collection names, SQS queue names, or error messages. No inline code blocks — reference findings files:
+
+| # | Hallazgo | Riesgo |
+|---|---|---|
+| H1 | | Alto / Medio / Bajo |
+
+**Recursos afectados** — table of affected services and collections:
+
+| Componente | Impacto |
+|---|---|
+| platforms-service | |
+| concentrador-service | |
+
+**Comandos ejecutados** — reference table pointing to the scripts file (no inline code):
+
+| # | Comando / Script | Propósito |
+|---|---|---|
+| C1 | | |
+
 **Acciones propuestas** — numbered list. Each action references the responsible team (Dev / SRE / Infra).
+
+**Hallazgos secundarios** — optional section for findings outside the primary incident scope.
 
 ---
 

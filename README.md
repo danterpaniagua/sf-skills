@@ -29,6 +29,7 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 | `sp-static-analysis` | `/sp-static-analysis` | Static analysis for critical defects and vulnerabilities |
 | `sp-tech-debt` | `/sp-tech-debt` | Record technical debt items to central log |
 | `sp-sre-output` | `/sp-sre-output` | Formatted outputs for PM, IT, and Jira |
+| `ops-aws` | `/ops-aws` | AWS / SQS triage — platforms-service and concentrador-service |
 
 ### `itiano-*` — Itiano Django Project
 
@@ -39,6 +40,14 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 | `itiano-scope-driven-development` | `/itiano-scope-driven-development` | Requirements analysis and scope management |
 | `itiano-scope-validation` | `/itiano-scope-validation` | Validate implementation against approved scope |
 | `itiano-test-planning` | `/itiano-test-planning` | Create validation and testing plans |
+
+### `ope-*` — Operations (Infrastructure)
+
+| Skill | Invocation | Scope |
+|---|---|---|
+| `ope-azure` | `/ope-azure` | Azure AD DS health/alerts, Kerberos policy, VMs, NSGs, Monitor |
+| `ope-aws` | `/ope-aws` | EC2, SQS, CloudWatch, IAM review, ECS, Fargate, ALB/NLB |
+| `ope-sre-output` | `/ope-sre-output` | Event artifacts: Jira tickets, closure reports, emails, ops-events log |
 
 ### Cross-project
 

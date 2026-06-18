@@ -14,11 +14,12 @@ Produce formatted event artifacts (Jira tickets, closure reports, emails) for in
 
 Each event lives in `operations/events/YYYYMMDD_description/`. Use the date the alert or incident was detected, not the date of investigation.
 
-Every event produces at minimum two files:
+Every event produces at minimum three files:
 
 | File | Purpose |
 |---|---|
 | `YYYYMMDD_description_ops.md` | Main ticket / closure report — written in Spanish |
+| `YYYYMMDD_description_ops-events.md` | Running activity log — append-only work journal |
 | `YYYYMMDD_description_scripts.sh` | All commands and scripts run during investigation and remediation |
 
 Additional files as needed: `_scripts.py`, `_scripts.ps1`, `_email_ops.md`, `_email_pm.md`.
@@ -53,6 +54,18 @@ Mark any command that modifies state with `⚠️` in the Propósito column.
 # === REMEDIATION ===
 # ⚠️ C3 — <short name>
 <command>
+```
+
+## Ops Events File (`_ops-events.md`)
+
+Append-only work journal. One entry per meaningful action: investigation step, remediation applied, finding, status update, or follow-up. Never edit past entries.
+
+```markdown
+# Eventos — YYYYMMDD_description
+
+## YYYY-MM-DD HH:MM — <título corto>
+
+Descripción del trabajo realizado, hallazgo o estado.
 ```
 
 ## Closure Report Structure (`_ops.md`)

@@ -59,10 +59,20 @@ Administrative table — one row per manual point grant. FK from `sml.CustomerPo
 
 | Concept | Channel | Recipients | Investigation status |
 |---|---|---|---|
-| `CompensationalPoints` | Customer service compensation | Club Grido end customers | **Exploit confirmed** — no ceiling, no Catalog_Id |
+| `CompensationalPoints` | Customer service compensation / HR employee grants | Club Grido end customers; also Grido employees via `GSFERNANDEZ` | **Exploit confirmed for unknown operators** — no ceiling, no Catalog_Id. `GSFERNANDEZ` grants are legitimate HR employee compensation — exclude from exploit totals. |
 | `HumanResourcesPoints` | Grido HR | **Grido employees only** — flag any non-employee | Legitimate — exclude from exploit totals |
 | `InstitutionalPoints` | Institutional / internal | **Grido employees** (from / to) | Legitimate — exclude from exploit totals |
-| `PrizePoints` | Prize / contest | End customers | Active 2023–2024; absent from 2025 — discontinuation unconfirmed |
+| `PrizePoints` | Prize / contest | End customers | Active continuously since 2023 via `GS31087232` — not discontinued |
+
+**Known operators:**
+
+| Operator | Channels | Role | Exclude from exploit? |
+|---|---|---|---|
+| `GSFERNANDEZ` | `CompensationalPoints` | HR crew — assigns compensation points to Grido employees | Yes — grants are legitimate employee compensation |
+| `GS31087232` | `PrizePoints`, `InstitutionalPoints`, `HumanResourcesPoints` | Long-tenure operator — prize batches, institutional grants, HR payroll | Partially — HR/Institutional legitimate; PrizePoints batches require per-event review (high-value uniform batches flagged Jun 2025, Jun 2026) |
+| `GSLCEBALLOS` | `PrizePoints`, `HumanResourcesPoints`, `CompensationalPoints`, `InstitutionalPoints` | HR crew — all four channels; also performs negative grants (reversals) to claw back fraudulent balances | Yes — all channels legitimate; negative grants are protective reversals, not exploits. Confirmed reversal: Eustacio Castro −62,475 pts (2024-12-20) |
+
+**Operator username convention:** Usernames are uppercase (e.g. `GSFERNANDEZ`, `GSLCEBALLOS`, `GS31087232`). Use case-insensitive comparison if querying `RegisterByUser`.
 
 **Exploit vector (confirmed 2026-06-02):** `sml.ManualAssignPoints` has no row-level ceiling, no mandatory `Catalog_Id`, and no approval workflow. A single operator can inject unlimited points to any customer with no technical control. Use Q_E1–Q_E5 to quantify historical exposure when this pattern is detected.
 
@@ -77,15 +87,28 @@ Auxiliary tables in the same schema (confirmed via `INFORMATION_SCHEMA`):
 ### `sml.Customer`
 `Id, FormDate, CreatedDate, UserId, EnrolledId, RegisterById, Country_Id, RegistrationChannel`
 
-> **Note:** Column `DeactivatedDate` does not exist in this table (confirmed — SQL error `Invalid column name 'DeactivatedDate'`). Remove from any query targeting this table.
+> `DeactivatedDate` does NOT exist on this table — confirmed SQL error 207 on two separate investigations (2026-06-03, 2026-06-12). Do not reference it in queries.
+
+**Deactivated account detection:** Upon deactivation, the platform obfuscates all PII in `sml.Person` — `FirstName`, `LastName`, `Email`, `UidSerie`, and other identity columns are replaced with the account's CustomerId GUID. Detect deactivation exclusively from `sml.Person` using:
+
+```sql
+-- Deactivated: UidSerie is a GUID, fails TRY_CAST to BIGINT
+CASE WHEN TRY_CAST(p.UidSerie AS BIGINT) IS NULL
+     THEN 'Desactivada' ELSE 'Activa' END AS EstadoCuenta
+```
+
+A `Person` row where `UidSerie` (or `FirstName` / `LastName`) contains a GUID string (e.g. `79C680B6-5EAC-C58D-D81E-08DD68DA7039`) is a deactivated and anonymized account — not a ghost registration. No join to `sml.Customer` is needed for deactivation checks.
+
+Points transferred to a deactivated account may be frozen depending on platform behavior.
 
 Relationship: `sml.CustomerPointsLog.CustomerId → sml.Customer.Id` (many-to-one).
 
 | Column | Fraud relevance |
 |---|---|
 | `CreatedDate` | Cluster of accounts created in same window = coordinated bulk registration |
-| `RegistrationChannel` | Same channel across many mule accounts = automated registration |
-| `RegisterById` / `EnrolledId` | Same registrar across multiple accounts = insider or automated enroller |
+| `RegistrationChannel` | `PUNTO DE VENTA` = registered at a POS terminal; `APP` / `WEB` = self-registered. Same channel across many mule accounts = automated registration. |
+| `RegisterById` | **FK → `sml.BranchOffice.Id`** (confirmed 2026-06-12). Identifies the branch where the account was created. `EnrolledId` is NULL when no enrolment branch was captured (older POS registrations). Same `RegisterById` across multiple accounts = same terminal = insider risk. |
+| `EnrolledId` | FK relationship unconfirmed. May be NULL for older registrations. |
 
 ### `smlst.CustomerPointsLog`
 `CustomerId, Points, LastLogDate`
@@ -164,6 +187,35 @@ Customer identity. Relationship: `sml.CustomerPointsLog.CustomerId → sml.Perso
 | `UidSerie` | Document number | `UidCode` + `UidSerie` + `Country_Id` is the natural identity key; duplicate = multiple accounts per person |
 | `Email` | Contact email | Shared email across accounts = duplicate account signal |
 | `UpdateDate` | `DATETIMEOFFSET` | Sudden profile update before a transfer = tampering signal |
+
+**Bulk CustomerId resolution (Q_RESOLVE_CUSTOMERIDS):** When multiple actors have pending CustomerId values, resolve all at once rather than one by one:
+
+```sql
+SELECT
+    TRY_CAST(p.UidSerie AS BIGINT)   AS DNI,
+    p.FirstName + ' ' + p.LastName   AS Name,
+    p.Id                              AS CustomerId
+FROM [SmartFran.Solution.SmartLoyalty].sml.Person p
+WHERE TRY_CAST(p.UidSerie AS BIGINT) IN (
+    <dni_1>, <dni_2>, ...
+)
+ORDER BY TRY_CAST(p.UidSerie AS BIGINT);
+```
+
+Deactivated actors will not appear (their `UidSerie` is a GUID, `TRY_CAST` returns NULL). For those, `CustomerId` is already the only identifier available from prior investigation.
+
+---
+
+## Platform scope — Multi-brand
+
+SmartLoyalty hosts **multiple franchise brands** on the same instance. Confirmed brands:
+
+| Brand | Registration identifier | Notes |
+|---|---|---|
+| Club Grido | `GRIDO*`, `GR*` branch codes | Primary brand — majority of POS network |
+| Mundo Helado | `MDOH*` branch codes | Ice cream franchise; separate franchise operator |
+
+Fraud crosses brand boundaries — an actor registered under Mundo Helado (e.g. branch MDOH01) may receive or spend points within the Club Grido network. Do not limit investigation scope to a single brand when following transfer chains.
 
 ---
 
@@ -306,14 +358,30 @@ Apply these checks to every participant resolved in Q4 / identity resolution. Fl
 
 ### DNI validity (Southern Cone context)
 
-| Country | Valid range | Flag if |
+**Argentina DNI structure (RENAPER):**
+
+Argentina issues two separate DNI series:
+
+| Population | Valid range | Notes |
 |---|---|---|
-| Argentina (AR) | 7–8 digits, ≥ 1,000,000 | < 7 digits, or < 1,000,000, or sequential (1234, 12345, 123456) |
+| Native-born Argentines | 1,000,000 – ~65,000,000 | Sequential allocation; current issuance ~55–65M as of 2026 |
+| Foreign legal residents (temporary or permanent) | Starts with **90, 93, 94, or 95** (millions) | Assigned by RENAPER upon obtaining residency; e.g., 90.000.001 – 90.999.999 |
+
+| Country | Valid | Flag as invalid |
+|---|---|---|
+| Argentina (AR) | 1M–~65M (native), or 90M/93M/94M/95M series (foreign resident) | < 7 digits; < 1,000,000; sequential (123456); all-same-digit (18181818); in gap ranges 66M–89M, 91M–92M, 96M+ |
 | Paraguay (PY) | 7–8 digits | < 7 digits or sequential |
 | Uruguay (UY) | 7–8 digits | < 7 digits or sequential |
 | Chile (CL) | RUT 7–9 digits + verifier | format mismatch |
 
-A DNI of exactly `123456` (6 digits, sequential 1–6) is **invalid in all supported countries** — automatic fake account flag.
+**Invalid gap ranges (AR):** 66,000,000–89,999,999 (no DNI series assigned here), 91,000,000–92,999,999 (gap between foreign series), 96,000,000+ (above all known foreign series).
+
+Additional automatic fake account flags:
+- **Sequential**: `123456`, `1234567` — invalid in all countries.
+- **All-same-digit / repeating pattern**: `18181818`, `24242424`, `11111111` — zero entropy, machine-generated.
+- **Impossible range (AR)**: `341688840` (~341M), `92623449` (92M — falls in the 91–92M gap, not a valid native or foreign series).
+
+> Eustacio C. Castro (DNI 92623449) is confirmed invalid — 92M is in the gap between the 90M and 93M foreign resident series.
 
 ### Name plausibility (Southern Cone context)
 
@@ -339,15 +407,19 @@ If any CustomerId or DNI from those files appears in the current investigation, 
 ### Updating memory files
 
 When an investigation closes and an account is confirmed:
-- **Hub/relay/feeder**: add row to `known_hubs.md` or `known_relays.md`. Columns: CustomerId, DNI, Nombre, País, Rol, Creado, Confirmado, Eventos.
-- **POS actor**: add row to `known_pos.md`. Columns: BranchOfficeId, Codigo, Sucursal, FranchiseGroupId, Franquicia, Rol, Confirmado, Eventos.
-- **Extended context**: add a note block to `actor_notes.md` keyed by DNI (accounts) or Codigo (branches).
+- **Hub/relay/feeder**: add row to `known_hubs.md` or `known_relays.md`. Columns (English): CustomerId, DNI, Name, Country, Role, Created, Confirmed, Events.
+- **POS actor**: add row to `known_pos.md`. Columns (English): BranchOfficeId, Code, Branch, FranchiseGroupId, Franchise, Role, Confirmed, Events.
+- **Extended context**: add a note block to `actor_notes.md` keyed by DNI (accounts) or Code (branches).
+
+All memory files (`known_hubs.md`, `known_relays.md`, `known_pos.md`, `actor_notes.md`) are maintained in **English** for token efficiency.
+
+> `sml.BranchOffice` SQL column is **`Code`** (not `Codigo`). Always write `bo.Code AS Codigo` in queries. "Codigo" is a display label only — using `bo.Codigo` directly will fail with error 207. Full schema: `Id, Name, Code, Description, FranchiseGroupId, AddressId, ActivatedDate, DeactivatedDate, DeactivateNote, CreatedDate, ExecutiveId`.
 
 ---
 
 ## Email Verification
 
-**Schema finding (confirmed 2026-06-04):** No explicit email verification column exists anywhere in the schema. `sml.Person.Email` stores the address only. `SmlSt.CustomerMailing` is a geographic mailing segmentation table (columns: LocationId, StateId, RegionId, StateName, RegionName, CityName) — `StateId` is province, not subscription status. `Mlg.MailContact.ContactData` is survey XML with no verification data.
+**Schema finding (confirmed 2026-06-04):** No explicit email verification column exists anywhere in the schema. `sml.Person.Email` stores the address only. `SmlSt.CustomerMailing` includes a `CustomerId` column (confirmed by working Q_VALIDATE_EMAIL queries) plus geographic segmentation columns (LocationId, StateId, RegionId, StateName, RegionName, CityName). A NULL result on `LEFT JOIN SmlSt.CustomerMailing ON CustomerId` means the account is not registered in any mailing segment — the `NO_EN_MAILING` flag. `Mlg.MailContact.ContactData` is survey XML with no verification data.
 
 The two available signals are:
 
@@ -364,6 +436,8 @@ Check `sml.Person.Email` against known disposable/anonymous email providers. A d
 |---|---|
 | `yopmail.com` | Simon Brizuela 46845173 + 46845174 (2026-06-04) |
 | `hilostar.com` | Dimon Briz 123456 (2026-06-04) |
+| `datehype.com` | Rafael Eduardo Colque 31035135 → Estefania Cazon (2026-06-12) |
+| `bultoc.com` | Tuntuntuntun Sahur DNI 341688840 (2026-06-12) |
 
 When a new disposable domain is found during an investigation, add it to this table.
 
@@ -429,6 +503,9 @@ And project these columns:
 | **Promotion exploitation** | Many accounts earning from the same `PromotionId` in a short window |
 | **Manual insertion** | `ManualAssignPointsId IS NOT NULL` — insider risk |
 | **Uncapped manual injection** | Operator assigns > 3,000 pts in a single `ManualAssignPoints` grant; `Catalog_Id = NULL`; no approval gate — systemic if > 75% of grants exceed daily cap over multiple months |
+| **Themed cluster registration** | Multiple accounts sharing a naming theme (meme characters, fictional universe, pop-culture references) combined with repeating-digit or impossible DNIs — signals a single operator performing coordinated synthetic registration. Confirmed pattern: Italian Brainrot characters (Tung Tung Sambayone / Tralalero Tralala / Tuntuntuntun Sahur, Jun 2026) with DNIs 18181818 / 51447556 / 341688840. |
+| **One-shot welcome-bonus grab** | Account created → welcome bonus received → immediately redeemed (< 15 min) or immediately relayed (< 20 min). Account goes dormant. Target: the 5,000 pt `NewCustomer` grant. |
+| **Deactivated account as sender** | A transfer where the sender's `sml.Person` record has all PII fields replaced with their own CustomerId GUID (confirmed deactivated) — indicates the transfer occurred before deactivation, OR a platform bug allows deactivated accounts to send. Always verify `sml.Customer.CreatedDate` vs transfer `LogDate` to determine sequence. |
 
 ---
 
@@ -455,6 +532,74 @@ Required sections in `YYYYMMDD_description_ops.md`:
 3. **Customer detail** — one row per customer × EventTypeCode: Cliente | Documento | EventTypeCode | Transacciones | Puntos. Header specifies window in UTC-3. Source: Q4.
 
 Place under `events/YYYYMMDD_description/`.
+
+### Points accounting — required in every analysis output
+
+Every investigation analysis (inline and in `_ops.md`) must cover two axes per actor:
+
+#### Axis 1 — Account origin and identity validation (mandatory for every actor)
+
+| Field | Source |
+|---|---|
+| Registration channel | `sml.Customer.RegistrationChannel` — `APP`, `WEB`, `PUNTO DE VENTA` |
+| Registration date | `sml.Customer.CreatedDate` |
+| Registering branch | `sml.Customer.RegisterById` → `sml.BranchOffice.Id` → `bo.Code`, `bo.Name`, franchise owner |
+| Country | `sml.Customer.Country_Id` |
+| **Email validation** | See Email Verification section — two signals: disposable domain (HIGH) + `SmlSt.CustomerMailing` absence (MEDIUM). No explicit verification column exists in the schema (confirmed 2026-06-04). Report both signals for every actor. |
+
+Email validation query to include in identity resolution:
+```sql
+SELECT
+    p.Email,
+    CASE
+        WHEN p.Email LIKE '%yopmail.com'
+          OR p.Email LIKE '%hilostar.com'
+          OR p.Email LIKE '%bultoc.com'
+          OR p.Email LIKE '%datehype.com'
+          OR p.Email LIKE '%mailinator.com'
+          OR p.Email LIKE '%guerrillamail.com'
+          OR p.Email LIKE '%tempmail.com'
+        THEN 'DOMINIO_DESECHABLE'
+        WHEN cm.CustomerId IS NULL
+        THEN 'NO_EN_MAILING'
+        ELSE 'OK'
+    END AS Email_Flag
+FROM sml.Person p
+LEFT JOIN SmlSt.CustomerMailing cm ON cm.CustomerId = p.Id
+WHERE p.Id = '<suspect_id>';
+```
+
+#### Axis 2 — Final point status (four states)
+
+Replace "Recuperable / Irrecuperable" with the four statuses below. A single actor may contribute to multiple statuses.
+
+| Status | Definition | Recovery |
+|---|---|---|
+| **Gastados** | Redeemed at POS via `DiscountPointsByExchange` — irreversible once ticket issued | None |
+| **Transferidos** | Sent to another account via `PointsByTransferSent` — trace the downstream chain | Follow chain |
+| **Activos** | Current balance in active (non-deactivated) account — `smlst.CustomerPointsLog.Points` | Suspend + reverse |
+| **Retenidos** *(Held)* | Account deactivated (PII scrubbed in `sml.Person`) but `smlst.CustomerPointsLog` still has Points > 0 — account cannot transact but points exist and are admin-reversible by CustomerId | Admin reversal |
+
+Detection query for **Retenidos**:
+```sql
+SELECT cst.CustomerId, cst.Points AS Pts_Retenidos, cst.LastLogDate
+FROM smlst.CustomerPointsLog cst
+JOIN sml.Person p ON p.Id = cst.CustomerId
+WHERE cst.CustomerId = '<suspect_id>'
+  AND TRY_CAST(p.UidSerie AS BIGINT) IS NULL   -- account deactivated
+  AND cst.Points > 0;
+```
+
+#### Table format
+
+| Actor | DNI | Rol | Origen (Canal / Fecha / Sucursal) | Pts Totales | Gastados | Transferidos | Activos | Retenidos |
+|---|---|---|---|---|---|---|---|---|
+| Tung Tung Sambayone | 18181818 | relay | APP / dic 2025 | 27.000 recv | ~14.000 | 38.000 | 2.830 | — |
+| 5DB72B42 (desactivada) | scrubbed | feeder | POS 3822 / feb 2023 | 27.000 | 0 | 27.000 | — | (pendiente smlst) |
+
+If a downstream account balance is unknown mark the cell `(pendiente)` and flag as time-sensitive — points may be cashed out while investigation is open.
+
+> **Never assume point statuses from prior analysis or session memory.** Every cell in the accounting table must be backed by a query result from the current investigation. Use `smlst.CustomerPointsLog` to confirm current balances; use `sml.CustomerPointsLog` aggregated by `EventTypeCode` to confirm spent/transferred totals.
 
 ### Manual assignment exploit closure (`_ops.md`)
 

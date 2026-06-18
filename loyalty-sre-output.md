@@ -10,6 +10,29 @@ Produce formatted outputs (emails, reports, Jira tickets) for different audience
 - Reports for PMs: clear, non-technical language.
 - Never use language that implies authority over the recipient.
 
+## Event Folder Layout
+
+Each event lives in `loyalty/events/YYYYMMDD_description/`. Every event produces at minimum two files:
+
+| File | Purpose |
+|---|---|
+| `YYYYMMDD_description_ops.md` | Main ticket / closure report — written in Spanish |
+| `YYYYMMDD_description_ops-events.md` | Running activity log — append-only work journal |
+
+Additional files as needed: `_scripts.sql`, `_queryXXX.sql`, `_email_ops.md`, `_email_pm.md`, `_transferencias_pm.csv`.
+
+## Ops Events File (`_ops-events.md`)
+
+Append-only work journal. One entry per meaningful action: investigation step, query result, finding, status update, or follow-up. Never edit past entries.
+
+```markdown
+# Eventos — YYYYMMDD_description
+
+## YYYY-MM-DD HH:MM — <título corto>
+
+Descripción del trabajo realizado, hallazgo o estado.
+```
+
 ## SQL Queries in Tickets
 
 All SQL queries run during an investigation or fix must be saved to a `.sql` file in the event subfolder (`YYYYMMDD_description_scripts.sql`). The ticket body references the file with a brief description table — no inline SQL blocks:
@@ -85,8 +108,40 @@ One row per transfer. Columns:
 Use exactly these sections in this order:
 
 **Resumen** — one paragraph: what happened, when, which database/platform.
-**Patrones identificados** — table with columns `Patrón` and `Detalle`. One row per pattern detected.
+
+**Tabla resumen** — key event metadata:
+
+| Campo | Valor |
+|---|---|
+| Caso | |
+| Base de datos | |
+| Severidad | |
+| Detectado | |
+| Resuelto | |
+| Responsable | |
+
+**Causa raíz** — one paragraph explaining the fraud mechanism and entry point.
+
+**Hallazgos** — table of detected fraud patterns:
+
+| # | Hallazgo | Riesgo |
+|---|---|---|
+| H1 | | Alto / Medio / Bajo |
+
+**Recursos afectados** — table of affected accounts, hubs, or relays.
+
 **Métricas del evento** — table with columns `Métrica` and `Valor`. Include: investigation window (GMT), transfer count, total points, dominant channel, senders over daily limit, points involved in breaches, receivers with post-event activity, accounts registered by systemic registrar (if applicable).
+
+**Consultas ejecutadas** — reference table pointing to the .sql file (no inline SQL):
+
+| # | Query | Propósito |
+|---|---|---|
+| Q1 | | |
+
+**Acciones propuestas** — numbered list of actions taken or to be taken.
+
 **Archivos de evidencia** — table with columns `Archivo` and `Contenido`. List all files under `events/YYYYMMDD_fraude_evidencia/`.
+
+**Hallazgos secundarios** — optional section for findings outside the primary fraud scope.
 
 - Do not include personal data (names, DNIs) in the ticket body — reference the CSV files instead.
