@@ -60,17 +60,23 @@ Mark any command that modifies state with `⚠️` in the Propósito column.
 
 Append-only work journal. One entry per meaningful action: investigation step, remediation applied, finding, status update, or follow-up. Never edit past entries.
 
+**Tense:** pretérito perfecto impersonal, first person — "se ha verificado", "se ha identificado", "se ha confirmado". Yo soy quien ejecuta. Never refer to the author as "el usuario", "el operador", or any third-person subject.
+
 ```markdown
 # Eventos — YYYYMMDD_description
 
 ## YYYY-MM-DD HH:MM — <título corto>
 
-Descripción del trabajo realizado, hallazgo o estado.
+**Comando:** CX-N — <nombre corto>
+**Resultado:** <output resumido>
+**Observación:** Se ha <participio> — una línea de interpretación.
 ```
 
 ## Closure Report Structure (`_ops.md`)
 
-Write in Spanish. Use exactly these sections in this order:
+Write in Spanish. This is a **Jira ticket describing work to be done** — use future or imperative tense throughout. Findings describe the current state; actions describe what must happen. Never write as if remediation is already complete.
+
+Use exactly these sections in this order:
 
 **Resumen** — one paragraph: what happened, when, which system/platform, severity.
 
