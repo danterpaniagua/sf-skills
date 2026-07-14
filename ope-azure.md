@@ -8,9 +8,8 @@ Investigation and remediation support for Azure infrastructure and Azure AD Doma
 - Azure VMs — compute state, diagnostics, extensions
 - Azure Networking — NSGs, VNets, DNS
 - Azure Monitor — alerts, metrics, activity log
-- Azure Service Bus — namespaces, topics, DLQ monitoring, action groups
 
-For NSG-specific audits on `sfcgnetsec01`, use `/loyalty-azure-nsg`.
+For NSG-specific audits on `sfcgnetsec01`, use `/loyalty-azure-nsg`. For SmartFran Cloud Service Bus, multi-tenant App Services, and franchise onboarding diagnostics, use `/cloud-azure`.
 
 ## Known Infrastructure
 
@@ -21,10 +20,6 @@ For NSG-specific audits on `sfcgnetsec01`, use `/loyalty-azure-nsg`.
 | Replica set | `East US / sfcgvnet01 / DMZ-AD` |
 | VNet | `sfcgvnet01` |
 | Resource group (NSG) | `DefaultGroup01` |
-| Service Bus namespace | `SmartFran-Cloud-ServiceBus-Grido-PRO` |
-| Service Bus RG | `SmartFran.Cloud.PRO.GRIDO` |
-| Service Bus subscription | SmartIT Cloud (`85c76dea-3304-4310-8656-bf21b28e4f4b`) |
-| Service Bus action group | `Service_Bus_Group` (RG: `SmartFran.Cloud.PRO`) |
 
 ## Command Constraint
 
@@ -138,34 +133,6 @@ az vm get-instance-view --name <vm-name> --resource-group <resource-group> --out
 # List VM extensions installed on a host
 az vm extension list --vm-name <vm-name> --resource-group <resource-group> --output table
 ```
-
----
-
-## Azure Service Bus — DLQ Monitoring
-
-**Portal:** Service Bus namespace → **Metrics** → metric `Dead-lettered messages`, split by Entity Name (per topic/queue). For prebuilt dashboards: namespace → **Insights**.
-
-```bash
-# List topics in a namespace
-az servicebus topic list \
-  --namespace-name SmartFran-Cloud-ServiceBus-Grido-PRO \
-  --resource-group SmartFran.Cloud.PRO.GRIDO \
-  --output table
-
-# List alert rules scoped to the Service Bus namespace
-az monitor metrics alert list \
-  --resource-group SmartFran.Cloud.PRO.GRIDO \
-  --output table \
-  --query "[].{Name:name, Enabled:enabled, Severity:severity, Criteria:criteria}"
-
-# Show action group receivers
-az monitor action-group show \
-  --name Service_Bus_Group \
-  --resource-group SmartFran.Cloud.PRO \
-  --output json
-```
-
-**DLQ alert rule baseline:** metric `Dead-lettered messages`, threshold `> 0`, aggregation `Total`, evaluation window ≥ 5 min. Narrower windows risk hitting the 100 emails/hour cap during bursts.
 
 ---
 

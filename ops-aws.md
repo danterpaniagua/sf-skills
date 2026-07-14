@@ -267,3 +267,49 @@ db.deadletters.aggregate([
 // D. Orders stuck in early states
 db.news.countDocuments({ typeId: { $lte: 3 }, updatedAt: { $lt: new Date(Date.now() - 30*60*1000) } })
 ```
+
+---
+
+## IAM Credential Leak — Impact Verification
+
+When a credential is found exposed (in logs, a response body, or source) and someone claims "no real impact" — verify empirically, don't accept the claim or restate the policy name alone. Confirmed workflow (2026-07-13, `userSQS` leak):
+
+```bash
+# 1. What's actually attached — managed policies, inline policies, group membership
+aws iam list-attached-user-policies --user-name <user> --output table
+aws iam list-user-policies --user-name <user> --output table
+aws iam list-groups-for-user --user-name <user> --output table
+
+# 2. Read every attached managed policy's actual document — Resource scoping is the whole question
+aws iam get-policy --policy-arn <policy-arn> --query "Policy.DefaultVersionId" --output text
+aws iam get-policy-version --policy-arn <policy-arn> --version-id <DefaultVersionId> --query "PolicyVersion.Document" --output json
+
+# 3. Empirical proof, not just the document — IAM Policy Simulator against representative
+#    actions (include destructive ones: PurgeQueue, DeleteObject, etc., not just read actions)
+aws iam simulate-principal-policy \
+  --policy-source-arn arn:aws:iam::<account>:user/<user> \
+  --action-names <action1> <action2> <action3> \
+  --resource-arns "*" \
+  --output table
+
+# 4. Key status and freshness — a key can be Active with an old CreateDate; check both,
+#    and pull a *fresh* last-used timestamp rather than reusing an earlier finding's date
+aws iam list-access-keys --user-name <user> --output table
+aws iam get-access-key-last-used --access-key-id <AccessKeyId> --output json
+```
+
+**What this answers, concretely:** whether the credential is scoped to specific resources or wildcarded (`Resource: "*"`), whether the specific leaked key (not just "a key on this user") is Active or already rotated, and whether it's actually been used recently — all three are required before agreeing or disagreeing with an impact claim. A policy *name* like `AmazonSQSFullAccess` is not evidence on its own — always pull the document and run the simulator.
+
+---
+
+## Tracing When a Finding Was Introduced
+
+When multiple instances of the same defect pattern exist across files/services, check whether they came from one change or were introduced independently — it changes the fix (revert one commit vs. structural detection):
+
+```bash
+# Run from the affected repo's local clone (e.g. smartfran/sp-logs/repo/<service>/)
+git log --oneline -- <file>
+git blame -L <start>,<end> --date=short -- <file>
+```
+
+Compare commit hashes and dates across every instance. Per the no-names rule below, cite commit id + date only in anything written to `events/` or a ticket — never the author name (fine to say out loud in conversation, not in the written record).

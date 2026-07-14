@@ -60,7 +60,7 @@ Mark any command that modifies state with `⚠️` in the Propósito column.
 
 Append-only work journal. One entry per meaningful action: investigation step, remediation applied, finding, status update, or follow-up. Never edit past entries.
 
-**Tense:** pretérito perfecto impersonal, first person — "se ha verificado", "se ha identificado", "se ha confirmado". Yo soy quien ejecuta. Never refer to the author as "el usuario", "el operador", or any third-person subject.
+**Tense:** pretérito perfecto, true first person — "he verificado", "he identificado", "he confirmado". Yo soy quien ejecuta. Never refer to the author as "el usuario", "el operador", or any third-person subject, and never use the impersonal "se ha..." construction.
 
 ```markdown
 # Eventos — YYYYMMDD_description

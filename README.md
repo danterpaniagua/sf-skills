@@ -47,7 +47,14 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 |---|---|---|
 | `ope-azure` | `/ope-azure` | Azure AD DS health/alerts, Kerberos policy, VMs, NSGs, Monitor |
 | `ope-aws` | `/ope-aws` | EC2, SQS, CloudWatch, IAM review, ECS, Fargate, ALB/NLB |
+| `ope-zabbix` | `/ope-zabbix` | Custom healthcheck-to-Zabbix integration: UserParameter items, macros, triggers, alert routing |
 | `ope-sre-output` | `/ope-sre-output` | Event artifacts: Jira tickets, closure reports, emails, ops-events log |
+
+### `cloud-*` — Cloud Infrastructure (Azure, SmartFran Cloud)
+
+| Skill | Invocation | Scope |
+|---|---|---|
+| `cloud-azure` | `/cloud-azure` | SmartFran Cloud multi-tenant App Services, Service Bus, franchise onboarding diagnostics, CosmosDB |
 
 ### Cross-project
 
