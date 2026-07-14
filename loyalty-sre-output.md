@@ -105,6 +105,8 @@ One row per transfer. Columns:
 
 ### Jira Tickets (Fraud)
 
+**Tags:** always apply the `SmartLoyalty` project tag from `docs/tags.md`, plus any project-specific/cross-cutting tags that apply (e.g. `Fraude`, `SML-Puntos`).
+
 Use exactly these sections in this order:
 
 **Resumen** — one paragraph: what happened, when, which database/platform.

@@ -76,6 +76,8 @@ Append-only work journal. One entry per meaningful action: investigation step, r
 
 Write in Spanish. This is a **Jira ticket describing work to be done** — use future or imperative tense throughout. Findings describe the current state; actions describe what must happen. Never write as if remediation is already complete.
 
+**Tags:** always apply exactly one project tag from `docs/tags.md` (`Operaciones` or `SmartCloud`, depending on which project the ticket belongs to) plus any project-specific/cross-cutting tags that apply — see that file for the full list.
+
 Use exactly these sections in this order:
 
 **Resumen** — one paragraph: what happened, when, which system/platform, severity.

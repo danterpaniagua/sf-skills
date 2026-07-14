@@ -47,6 +47,8 @@ Descripción del trabajo realizado, hallazgo o estado.
 
 All tickets go in `docs/jira/dd-mm-yyyy_<small_title>/ticket.md`. Written in Spanish.
 
+**Tags:** always apply the `SmartPedidos` project tag from the root `docs/tags.md`, plus any project-specific/cross-cutting tags that apply (e.g. `Concentrador`, `Platform`, `MongoDB`).
+
 ### Log Improvements ticket (`dd-mm-yyyy_<service>-log-improvements`)
 
 Use exactly these sections in this order:
