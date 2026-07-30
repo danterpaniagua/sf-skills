@@ -14,15 +14,42 @@ Produce formatted event artifacts (Jira tickets, closure reports, emails) for in
 
 Each event lives in `operations/events/YYYYMMDD_description/`. Use the date the alert or incident was detected, not the date of investigation.
 
-Every event produces at minimum three files:
+Every event produces at minimum four files:
 
 | File | Purpose |
 |---|---|
-| `YYYYMMDD_description_ops.md` | Main ticket / closure report — written in Spanish |
+| `YYYYMMDD_description_investigation.md` | Working notes — English, freely editable, created first (see below) |
+| `YYYYMMDD_description_ops.md` | Main ticket / closure report — written in Spanish, only once findings have converged |
 | `YYYYMMDD_description_ops-events.md` | Running activity log — append-only work journal |
 | `YYYYMMDD_description_scripts.sh` | All commands and scripts run during investigation and remediation |
 
 Additional files as needed: `_scripts.py`, `_scripts.ps1`, `_email_ops.md`, `_email_pm.md`.
+
+## Investigation File (`_investigation.md`)
+
+Create this **first**, before `_ops.md` exists. Its job is to absorb the messy part of an investigation — working theories, reversed conclusions, dead ends — so `_ops.md` never has to. Write in English (the one exception to the events/ Spanish rule below). Unlike `_ops-events.md`, this file is **not append-only** — rewrite sections in place as understanding changes; it should always reflect current best understanding, not a historical trail of every theory that got discarded.
+
+Also serves as a resumption point: if investigation spans multiple sessions, read this file first before re-deriving anything from raw command output.
+
+```markdown
+# Investigation — YYYYMMDD_description
+
+**Status:** in progress | converged — ready for ticket
+
+## Confirmed facts
+- Fact, with evidence reference (Cx from scripts file, or file:line for source code)
+
+## Current working theory
+One paragraph — the best current explanation, stated as current belief, not final fact until Status is "converged".
+
+## Ruled out
+- Theory — why it's ruled out, with evidence reference. Keep brief; this exists so a theory doesn't get re-investigated, not to preserve narrative.
+
+## Open questions / next steps
+- ...
+```
+
+Once `Status: converged`, write `_ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Findings that were ruled out along the way don't appear in the ticket at all unless they're independently useful context (e.g. ruling out the WAF as a cause is worth stating in the ticket; the fact that three different VM-reactivation theories were tried before the right one is not).
 
 ## Commands and Scripts in Tickets
 
@@ -68,9 +95,13 @@ Append-only work journal. One entry per meaningful action: investigation step, r
 ## YYYY-MM-DD HH:MM — <título corto>
 
 **Comando:** CX-N — <nombre corto>
-**Resultado:** <output resumido>
-**Observación:** Se ha <participio> — una línea de interpretación.
+**Resultado:**
+<output>
+
+<párrafo en primera persona, pretérito perfecto, sin etiqueta en negrita — interpretación del resultado, puede ser multi-oración>
 ```
+
+Omit `**Comando:**` entirely when the entry documents a manual step (no real command/script ran) — go straight from the heading to `**Resultado:**`.
 
 ## Closure Report Structure (`_ops.md`)
 
@@ -130,4 +161,4 @@ Use exactly these sections in this order:
 
 ## Language
 
-All content written to `events/` must be in **Spanish**. All other conversational output in **English**.
+All content written to `events/` must be in **Spanish**, with one exception: `_investigation.md` is written in **English** (see above). All other conversational output in **English**.

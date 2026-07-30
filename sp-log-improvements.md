@@ -34,7 +34,9 @@ Create or append to `docs/<service>-findings.md`. Never overwrite existing findi
 
 Each finding must include: severity, file + line, current code (bad), correct code (good).
 
-For SUB-010, include a feasibility assessment with:
+For SUB-010, the root-cause/extraction reasoning is the one part of this skill that's genuine judgment rather than mechanical pattern-matching, and can change as you look deeper (e.g. an initial "extract to middleware" call reversed once an established base-class pattern turns up elsewhere in the service). Work that out first in `docs/jira/<date>_<service>-log-improvements/investigation.md` — English, freely editable, not append-only — before committing to the feasibility assessment below. Once settled, the findings file and Step 5's Jira story should state the final call directly, not the reasoning path that got there.
+
+Feasibility assessment (goes in the findings file once settled):
 - File name and total log call count vs. service total (e.g. `branch.js — 88 / 131 calls = 67%`)
 - Root cause: mixed concerns (controller + platform orchestration + cron logic), missing base class, no event layer, etc.
 - Recommendation: extract to base class, middleware, event emitter, or dedicated logging wrapper — with a concrete example
@@ -72,7 +74,7 @@ Validation checklist:
 
 Create `docs/jira/<date>_<service>-log-improvements/ticket.md` following the structure in `docs/jira-story-log-improvements.md`. Include: description, acceptance criteria (one per sub-task), sub-task list with files and line numbers, final status.
 
-If SUB-010 findings were identified, add a dedicated section to the ticket: **"Log responsibility — feasibility"** with the assessment and recommendation. Mark it as a separate follow-up story if the effort is Medium or High.
+If SUB-010 findings were identified, add a dedicated section to the ticket: **"Log responsibility — feasibility"** with the assessment and recommendation, pulled from the converged state of `investigation.md` if one exists — state the final call directly, not the reasoning path that got there. Mark it as a separate follow-up story if the effort is Medium or High.
 
 Ask before writing: "Do you want me to generate the Jira story for this run?"
 

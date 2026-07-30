@@ -14,6 +14,7 @@ Produce formatted outputs (Jira tickets, emails, reports) for SmartPedidos incid
 
 | Output | Language |
 |---|---|
+| Investigation notes (`investigation.md`) | English |
 | Jira tickets (`docs/jira/**`) | Spanish |
 | Tech debt files (`docs/tech-debt/**`) | English |
 | Emails to Operations | English |
@@ -22,14 +23,41 @@ Produce formatted outputs (Jira tickets, emails, reports) for SmartPedidos incid
 
 ## Event Folder Layout
 
-Each ticket lives in `docs/jira/dd-mm-yyyy_<small_title>/`. Every incident ticket produces at minimum two files:
+Each ticket lives in `docs/jira/dd-mm-yyyy_<small_title>/`. Every incident ticket produces at minimum three files:
 
 | File | Purpose |
 |---|---|
-| `ticket.md` | Main ticket — written in Spanish |
+| `investigation.md` | Working notes — English, freely editable, created first (see below) |
+| `ticket.md` | Main ticket — written in Spanish, only once findings have converged |
 | `ops-events.md` | Running activity log — append-only work journal |
 
 Additional files as needed: `scripts.sh`, `scripts.js`, `email_ops.md`, `email_pm.md`.
+
+## Investigation File (`investigation.md`)
+
+Create this **first**, before `ticket.md` exists. Its job is to absorb the messy part of an investigation — working theories about a root cause, reversed conclusions, dead ends — so `ticket.md` never has to. Write in English. Unlike `ops-events.md`, this file is **not append-only** — rewrite sections in place as understanding changes; it should always reflect current best understanding, not a historical trail of every theory that got discarded.
+
+Also serves as a resumption point: if investigation spans multiple sessions, read this file first before re-deriving anything from raw command/query output.
+
+```markdown
+# Investigation — dd-mm-yyyy_<small_title>
+
+**Status:** in progress | converged — ready for ticket
+
+## Confirmed facts
+- Fact, with evidence reference (Cx from the scripts file, or file:line for source code)
+
+## Current working theory
+One paragraph — the best current explanation, stated as current belief, not final fact until Status is "converged".
+
+## Ruled out
+- Theory — why it's ruled out, with evidence reference. Keep brief; this exists so a theory doesn't get re-investigated, not to preserve narrative.
+
+## Open questions / next steps
+- ...
+```
+
+Once `Status: converged`, write `ticket.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language.
 
 ## Ops Events File (`ops-events.md`)
 

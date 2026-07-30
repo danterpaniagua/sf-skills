@@ -5,6 +5,8 @@
 Detect fraudulent activity in point movements within `SmartFran.Solution.SmartLoyalty`: transfers, accumulations, manual assignments, and redemptions.
 
 > POS terminal manipulation via franchise networks is handled by the **`fraud-pos`** skill. When an account shows high-volume cross-branch POS activity or geographic impossibility, note the signal and invoke `fraud-pos` for the franchise investigation path.
+>
+> A member disputing specific redemptions/deductions on their own account ("what happened to my points") is handled by the **`fraud-dispute`** skill — single-`CustomerId` balance reconciliation, not a network investigation. This skill (`fraud-points`) covers transfer fraud, accumulation anomaly, and manual assignment exploit only.
 
 This skill operates on the **production database** (`SmartFran.Solution.SmartLoyalty`). Access is **implicit within this skill's scope** — no explicit user request required.
 
@@ -15,7 +17,9 @@ This skill operates on the **production database** (`SmartFran.Solution.SmartLoy
 ### `sml.CustomerPointsLog`
 `Id, CustomerId, LogDate, Note, Points, EventTypeCode, SaleId, PromotionId, ArticleId, ManualAssignPointsId`
 
-Primary log of all point events. Known `EventTypeCode` values:
+Primary log of all point events.
+
+**Confirmed `EventTypeCode` values** (the ones that come up in nearly every investigation). Full list of all 36 values including the ~24 unconfirmed "Named only" codes: `loyalty/docs/eventtypecode_reference.md` — read it when a query returns a code not in this table, or before promoting one to Confirmed:
 
 | EventTypeCode | Meaning |
 |---|---|
@@ -24,10 +28,13 @@ Primary log of all point events. Known `EventTypeCode` values:
 | `EarnPointsByBuying` | Points earned from a POS purchase (`SaleId` + `ArticleId` populated) |
 | `EarnPointsByPromotion` | Promotional bonus tied to a purchase (`PromotionId` + `SaleId` populated; can be 0 pts) |
 | `Article99999WithoutPoints` | Purchase of a zero-point article (`SaleId` populated, always 0 pts) |
-| `CompensationalPoints` | Manual administrative compensation (`ManualAssignPointsId` populated, no `SaleId`) |
+| `CompensationalPoints` | Manual administrative compensation (`ManualAssignPointsId` populated, no `SaleId`) — also an `AssignmentConcept` value, see channel classification below |
 | `DiscountPointsByExchange` | Points deducted in a redemption/exchange event (negative value) |
 | `NewCustomer` | Welcome grant on account creation (typically 0 pts) |
 | `RemovePointsBySaleInvalidation` | Points reversed due to cancelled sale (negative value) |
+| `PrizePoints` | Manual grant, contest/prize channel (`ManualAssignPointsId` populated) — also an `AssignmentConcept` value, see channel classification below. Root-cause of the 2026-07-22 mass-duplication incident (`events/20260722_puntos_duplicados_masivos_waf504/`) |
+| `HumanResourcesPoints` | Grido HR manual grant — also an `AssignmentConcept` value, see channel classification below |
+| `InstitutionalPoints` | Institutional/internal manual grant — also an `AssignmentConcept` value, see channel classification below |
 
 A transfer is a **paired operation** written atomically:
 
@@ -173,43 +180,7 @@ One row per transfer. Links the sender and receiver `CustomerPointsLog` rows dir
 | `Date` | `DATETIMEOFFSET +00:00` (GMT) | Primary filter for time-window queries |
 | `SourceChannel` | `WEB` or `APP` | Uniform channel across many transfers = automation signal |
 
-### `Sml.Sale`
-`Id, SaleDate, Delivery, BranchOfficeId, CustomerId, CustomerCardId, PointsLogId, InvalidatedPointsLogId, PaymentTypeCode, Distribution, PlatformCode`
-
-One row per POS/platform transaction. Confirmed 2026-07-11 while tracing a member dispute — not previously documented.
-
-| Column | Fraud/dispute relevance |
-|---|---|
-| `BranchOfficeId` | FK → `sml.BranchOffice.Id` — join with `bo.Code`/`bo.Name` to compare against the customer's known/home branch. A disputed sale at a foreign branch is a stronger signal than one at the customer's regular branch. |
-| `CustomerCardId` | Physical/digital card identifier. **A different `CustomerCardId` across disputed vs. undisputed sales is the clearest card-cloning signal.** Identical card ID across all sales rules out cloning/substitution. |
-| `PaymentTypeCode` | e.g. `EF` (efectivo/cash), `TD` (tarjeta de débito), `MU` (multi/plataforma). Two different payment types on the same card within minutes at the same branch can indicate a second, unrelated transaction was rung up in the same visit. |
-| `PlatformCode` | e.g. `POS` (physical terminal), `PG` (payment gateway/app-integrated). Consistent platform across disputed and undisputed sales = normal usage pattern, not remote takeover. |
-| `PointsLogId` | FK → `sml.CustomerPointsLog.Id` — direct link from the sale to its resulting point-log row(s). |
-| `InvalidatedPointsLogId` | Populated when the sale was later invalidated/reversed — check this before treating a sale as still-active. |
-
-### `Sml.SaleDetail`
-`Id, Amount, SaleId, SalePromotionId, ArticleId, PosArticleRef`
-
-Article-level line items for a sale. One `SaleId` can have multiple `SaleDetail` rows (e.g. a combo redemption bundling two articles under one `SalePromotionId`). Join `SaleId` → `Sml.Sale.Id`.
-
-### `Sml.SalePromotion`
-`Id (GUID), PromotionId, SaleId`
-
-Links a sale to the specific promotion/catalog item redeemed. Join `PromotionId` → `Sml.Promotion.Id` to decode what was actually purchased/redeemed.
-
-### `Sml.Promotion`
-`Id, Name, Description, Points, Quantity, ValidSinceDate, ValidToDate, Type, ...` (132 columns confirmed via `INFORMATION_SCHEMA`, most are scheduling/eligibility flags)
-
-Master catalog of redeemable promotions. **`Points` is negative for redemptions** (e.g. `-5000`) and this is the field that decodes a `DiscountPointsByExchange` event into an actual product name.
-
-```sql
--- Decode what a redemption (PromotionId) actually was
-SELECT Id AS PromotionId, Name, Description, Points, Type, Quantity
-FROM [SmartFran.Solution.SmartLoyalty].Sml.Promotion
-WHERE Id IN (<promotion_id_1>, <promotion_id_2>, ...);
-```
-
-Useful in disputes: if two `DiscountPointsByExchange` rows share the same `SaleId` and `PromotionId`, they are the same redemption split into catalog-quantity lines (e.g. 2× a 5,000-pt item = one 10,000-pt redemption). If a disputed deduction has its **own distinct `SaleId`/`PromotionId`** resolving to a **different named product**, it is a genuinely separate transaction — not a system duplicate/glitch.
+> `Sml.Sale`, `Sml.SaleDetail`, `Sml.SalePromotion`, `Sml.Promotion` (product/redemption decode tables) moved to `loyalty-fraud-dispute.md` — their only consumer is the member-dispute workflow.
 
 ---
 
@@ -336,24 +307,6 @@ When the spike is **not a transfer** — filter `sml.CustomerPointsLog.LogDate` 
 6. **Manual assignments (Q6)**: filter `ManualAssignPointsId IS NOT NULL`. Any hit = insider risk.
 7. **Daily limit check (Q7)**: flag customers with `SUM(Points) > 3,000` for the full UTC-3 day.
 8. **Top earner history (Q8)**: weekly/monthly totals for high-volume recipients. Compare against limits and prior session baseline.
-
----
-
-### Member dispute (single-account balance reconciliation)
-
-When a member disputes specific redemptions/deductions and asks "what happened to my points" — this is not a network investigation (no hub/relay/exploit search). Scope is one `CustomerId`. Confirmed workflow (2026-07-11):
-
-1. **Identity resolution (Q1)**: resolve CustomerId from DNI, confirm account origin (channel/date/branch), email validation, deactivation status — same Axis 1 fields as any actor.
-2. **Current balance (Q2)**: `smlst.CustomerPointsLog.Points`.
-3. **Full event history (Q3)**: pull `sml.CustomerPointsLog` for a window comfortably wrapping every disputed date — do not query per-event ±2h windows separately, one continuous range is easier to reconcile.
-4. **Point-in-time balance — verify, don't infer.** Two independent checks, both required before telling the member anything is confirmed:
-   - **Lifetime sum check**: `SELECT SUM(Points) FROM sml.CustomerPointsLog WHERE CustomerId = ...` with no date filter. Must equal the current `smlst` balance exactly. If it doesn't, something adjusts the balance outside the log and the rest of this method is unsafe to use.
-   - **Direct historical balance**: `SELECT SUM(Points) FROM sml.CustomerPointsLog WHERE CustomerId = ... AND LogDate < '<cutoff_GMT>'` gives the exact balance as of any past date. **Never derive a historical balance by subtracting known events from the current balance without running this direct sum as a cross-check** — an inferred number is only as good as the assumption that no event was missed, and that assumption must be tested, not asserted.
-5. **Running balance table**: once both checks pass, walk forward event-by-event from the verified starting balance through every disputed transaction to the current balance. If the walk lands exactly on the confirmed current balance, there is no undiscovered fourth deduction — the member's tally of "more was taken" is fully explained by the transactions already found (or isn't, and the arithmetic will show a gap that needs another query pass).
-6. **Product-level decode (if redemptions are disputed)**: join `SaleId`/`PromotionId` through `Sml.SalePromotion` → `Sml.Promotion` to get the actual product name. Two `DiscountPointsByExchange` rows under the **same** `SaleId`/`PromotionId` are one redemption split into catalog lines (normal). A disputed deduction with its **own** `SaleId`/`PromotionId` resolving to a **different named product** is a real, distinct transaction — not a duplicate/glitch — which shifts the likely explanation toward card-sharing or POS/counter error rather than a backend bug.
-7. **Card/branch trace (`Sml.Sale`)**: pull `CustomerCardId`, `BranchOfficeId`, `PaymentTypeCode`, `PlatformCode` for every sale in the window. Identical `CustomerCardId` across disputed and undisputed sales rules out card cloning. Branches/platforms matching the member's own undisputed history rule out remote takeover — points toward shared card use or a counter-side error instead.
-
-This path produces no hub/relay memory update — the member is the disputant, not a suspect, unless the trace itself surfaces a fraud pattern from the sections above.
 
 ---
 
@@ -665,14 +618,3 @@ Same three required sections as accumulation anomaly, plus:
 5. **Account balance status** — for each flagged account: CustomerId | Saldo actual | Puntos asignados | Reversión posible.
 6. **Exploit scope section** — monthly trend table (Q_E4) + top beneficiaries (Q_E3) + total excess above daily cap (Q_E2).
 7. **Action items** — split into: Inmediatas (reversals, operator suspension) / Técnicas (ceiling, Catalog_Id enforcement, approval workflow) / Auditoría histórica (redeemed vs intact, legal escalation).
-
-### Member dispute closure (`_ops.md`)
-
-Single-account scope — the three network-wide metrics (Clientes únicos, etc.) collapse to 1 and can be noted as such rather than omitted. Required sections:
-
-1. **Metrics table** — same format as accumulation anomaly, scoped to one customer.
-2. **EventTypeCode breakdown** — Q1-style, scoped to the account.
-3. **Reconstrucción por transacción disputada** — one table per disputed date: hora UTC-3, SaleId, PromotionId, producto decodificado (`Sml.Promotion.Name`), puntos, sucursal, tarjeta, PaymentType. State explicitly whether each disputed line matches (same `SaleId`) or is separate from (different `SaleId`/product) any transaction the member acknowledges.
-4. **Balance reconciliation table** — verified starting balance (direct `SUM`, not inferred) → running balance through every event → confirmed current balance. Must close exactly; note explicitly if it doesn't.
-5. **Points accounting** — Axis 1 origin + Axis 2 four-state, same as any actor. For a dispute, the closure table (`Actor | DNI | Rol | Pts Totales | Recuperable | No Recuperable`) rol is "Socia — denunciante", not hub/relay/feeder.
-6. **Acciones propuestas** — split into: verification steps with the branch/customer (not reversals yet) / conditional remediation (credit back if verification fails to find a mundane explanation) / explicitly note "Sin acciones técnicas" if no platform gap was found (distinguishes this from the exploit-closure format, where technical remediation is usually required).

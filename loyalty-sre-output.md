@@ -12,18 +12,47 @@ Produce formatted outputs (emails, reports, Jira tickets) for different audience
 
 ## Event Folder Layout
 
-Each event lives in `loyalty/events/YYYYMMDD_description/`. Every event produces at minimum two files:
+Each event lives in `loyalty/events/YYYYMMDD_description/`. Every event produces at minimum three files:
 
 | File | Purpose |
 |---|---|
-| `YYYYMMDD_description_ops.md` | Main ticket / closure report — written in Spanish |
+| `YYYYMMDD_description_investigation.md` | Working notes — English, freely editable, created first (see below) |
+| `YYYYMMDD_description_ops.md` | Main ticket / closure report — written in Spanish, only once findings have converged |
 | `YYYYMMDD_description_ops-events.md` | Running activity log — append-only work journal |
 
 Additional files as needed: `_scripts.sql`, `_queryXXX.sql`, `_email_ops.md`, `_email_pm.md`, `_transferencias_pm.csv`.
 
+## Investigation File (`_investigation.md`)
+
+Create this **first**, before `_ops.md` exists. Its job is to absorb the messy part of an investigation — working theories about a fraud pattern or root cause, reversed conclusions, dead ends — so `_ops.md` never has to. Write in English — the one exception to the project's rule that content written to `events/` is Spanish (`loyalty/CLAUDE.md`). Unlike `_ops-events.md`, this file is **not append-only** — rewrite sections in place as understanding changes; it should always reflect current best understanding, not a historical trail of every theory that got discarded.
+
+Also serves as a resumption point: if investigation spans multiple sessions (common for multi-day fraud tracing), read this file first before re-deriving anything from raw query output.
+
+```markdown
+# Investigation — YYYYMMDD_description
+
+**Status:** in progress | converged — ready for ticket
+
+## Confirmed facts
+- Fact, with evidence reference (Qx from the .sql file, or CustomerId/table reference)
+
+## Current working theory
+One paragraph — the best current explanation (fraud mechanism, entry point, actor role), stated as current belief, not final fact until Status is "converged".
+
+## Ruled out
+- Theory — why it's ruled out, with evidence reference. Keep brief; this exists so a theory doesn't get re-investigated, not to preserve narrative.
+
+## Open questions / next steps
+- ...
+```
+
+Once `Status: converged`, write `_ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language.
+
 ## Ops Events File (`_ops-events.md`)
 
 Append-only work journal. One entry per meaningful action: investigation step, query result, finding, status update, or follow-up. Never edit past entries.
+
+**Voice:** first person throughout, pretérito perfecto — Dante narrating his own work ("confirmé", "detecté", "extraje"). Never third person ("el usuario pidió", "el usuario confirmó") and never impersonal ("se ha confirmado"). This applies even when narrating a request or a fact Dante provided in conversation — write it as his own action or finding, not as something reported to/by an external "usuario". Facts about external events (e.g. a VM restart) stay factual/passive if Dante didn't perform them himself (`se reinició la VM`, not `reinicié la VM`) — only the investigation actions are first person.
 
 ```markdown
 # Eventos — YYYYMMDD_description

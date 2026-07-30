@@ -11,6 +11,8 @@ Investigation and remediation support for Azure infrastructure and Azure AD Doma
 
 For NSG-specific audits on `sfcgnetsec01`, use `/loyalty-azure-nsg`. For SmartFran Cloud Service Bus, multi-tenant App Services, and franchise onboarding diagnostics, use `/cloud-azure`.
 
+> **`itservices` account:** shared IIS App Pool identity across all 12 SmartLoyalty production web servers (see below and `operations/docs/itservices_rotacion_password_runbook.md`). Any credential/lockout/encryption-type change on this account is a fleet-wide operation, never a single-server one — a password rotated on one server while others still hold the old one drives repeated failed logons and re-locks the account domain-wide.
+
 ## Known Infrastructure
 
 | Resource | Value |
