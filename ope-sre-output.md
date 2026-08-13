@@ -18,16 +18,18 @@ Every event produces at minimum four files:
 
 | File | Purpose |
 |---|---|
-| `YYYYMMDD_description_investigation.md` | Working notes — English, freely editable, created first (see below) |
-| `YYYYMMDD_description_ops.md` | Main ticket / closure report — written in Spanish, only once findings have converged |
-| `YYYYMMDD_description_ops-events.md` | Running activity log — append-only work journal |
-| `YYYYMMDD_description_scripts.sh` | All commands and scripts run during investigation and remediation |
+| `investigation.md` | Working notes — English, freely editable, created first (see below) |
+| `ops.md` | Main ticket / closure report — written in Spanish, only once findings have converged |
+| `ops-events.md` | Running activity log — append-only work journal |
+| `scripts.sh` | All commands and scripts run during investigation and remediation |
 
-Additional files as needed: `_scripts.py`, `_scripts.ps1`, `_email_ops.md`, `_email_pm.md`.
+Additional files as needed: `scripts.py`, `scripts.ps1`, `email_ops.md`, `email_pm.md`.
 
-## Investigation File (`_investigation.md`)
+Files are named by suffix only — no `YYYYMMDD_description_` prefix, the folder already disambiguates.
 
-Create this **first**, before `_ops.md` exists. Its job is to absorb the messy part of an investigation — working theories, reversed conclusions, dead ends — so `_ops.md` never has to. Write in English (the one exception to the events/ Spanish rule below). Unlike `_ops-events.md`, this file is **not append-only** — rewrite sections in place as understanding changes; it should always reflect current best understanding, not a historical trail of every theory that got discarded.
+## Investigation File (`investigation.md`)
+
+Create this **first**, before `ops.md` exists. Its job is to absorb the messy part of an investigation — working theories, reversed conclusions, dead ends — so `ops.md` never has to. Write in English (the one exception to the events/ Spanish rule below). Unlike `ops-events.md`, this file is **not append-only** — rewrite sections in place as understanding changes; it should always reflect current best understanding, not a historical trail of every theory that got discarded.
 
 Also serves as a resumption point: if investigation spans multiple sessions, read this file first before re-deriving anything from raw command output.
 
@@ -49,7 +51,7 @@ One paragraph — the best current explanation, stated as current belief, not fi
 - ...
 ```
 
-Once `Status: converged`, write `_ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Findings that were ruled out along the way don't appear in the ticket at all unless they're independently useful context (e.g. ruling out the WAF as a cause is worth stating in the ticket; the fact that three different VM-reactivation theories were tried before the right one is not).
+Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Findings that were ruled out along the way don't appear in the ticket at all unless they're independently useful context (e.g. ruling out the WAF as a cause is worth stating in the ticket; the fact that three different VM-reactivation theories were tried before the right one is not).
 
 ## Commands and Scripts in Tickets
 
@@ -83,11 +85,11 @@ Mark any command that modifies state with `⚠️` in the Propósito column.
 <command>
 ```
 
-## Ops Events File (`_ops-events.md`)
+## Ops Events File (`ops-events.md`)
 
 Append-only work journal. One entry per meaningful action: investigation step, remediation applied, finding, status update, or follow-up. Never edit past entries.
 
-**Tense:** pretérito perfecto, true first person — "he verificado", "he identificado", "he confirmado". Yo soy quien ejecuta. Never refer to the author as "el usuario", "el operador", or any third-person subject, and never use the impersonal "se ha..." construction.
+**Tense:** pretérito perfecto, true first person — "he verificado", "he identificado", "he confirmado". Yo soy quien ejecuta. Never refer to the author as "el usuario", "el operador", or any third-person subject, and never use the impersonal "se ha..." construction. Also never frame a decision/pivot as receiving an order from an external party ("he recibido la indicación de...", "a pedido de...") — that still implies a commander/executor hierarchy even without naming "el usuario". State the decision as a direct fact/action instead: "No toco el stream por ahora" / "He retomado X", not "He recibido la indicación de no tocar/retomar X".
 
 ```markdown
 # Eventos — YYYYMMDD_description
@@ -103,7 +105,7 @@ Append-only work journal. One entry per meaningful action: investigation step, r
 
 Omit `**Comando:**` entirely when the entry documents a manual step (no real command/script ran) — go straight from the heading to `**Resultado:**`.
 
-## Closure Report Structure (`_ops.md`)
+## Closure Report Structure (`ops.md`)
 
 Write in Spanish. This is a **Jira ticket describing work to be done** — use future or imperative tense throughout. Findings describe the current state; actions describe what must happen. Never write as if remediation is already complete.
 
@@ -117,6 +119,7 @@ Use exactly these sections in this order:
 
 | Campo | Valor |
 |---|---|
+| Ticket Jira | (ask the user if not already known — see root `CLAUDE.md` → "External References") |
 | ID alerta | |
 | Sistema | |
 | Severidad | |
@@ -148,7 +151,7 @@ Use exactly these sections in this order:
 
 - **Never estimate timelines.**
 - **No code of any kind** in the email body — scripts file carries the detail.
-- Reference the Jira ticket and event subfolder.
+- Reference the Jira ticket ID — never a local repo path (e.g. `operations/events/...`, `cloud/events/...`). Ask the user for the Jira ID first if not already known (see root `CLAUDE.md` → "External References").
 - Describe the incident and proposed actions in plain technical language.
 
 ## Emails to PMs
@@ -158,7 +161,9 @@ Use exactly these sections in this order:
 - Describe impact in business terms: affected services, risk, proposed resolution.
 - Never mention internal security findings, access reviews, or internal remediation details.
 - "Próximos pasos" includes only actions visible or relevant to PMs. If only internal, omit the section.
+- **Never flatten hedged findings into certainty.** If the source ticket/investigation calls something circumstantial, proposed-but-undecided, or unconfirmed, the email must keep an equivalent hedge or omit the claim — never state it as settled fact just because the summary is shorter. Applies to causal links ("como consecuencia" implies confirmed causation — don't write it if the source only says "consistent with"), future actions ("vamos a hacer X" means it was actually decided, not merely proposed in an action-item list), and outcomes ("resuelto", "sin impacto", "volvió a la normalidad") — only state these if something was actually checked at that level, not inferred from a lower-level signal.
+- May mention the real Jira ticket ID for "more information" once it's confirmed to exist (see root `CLAUDE.md` → "External References") — that's a valid, clickable reference. Never use internal findings/command markers like `(H1)`/`(C3)` in a PM email, and never a local repo path — neither resolves to anything a PM could open.
 
 ## Language
 
-All content written to `events/` must be in **Spanish**, with one exception: `_investigation.md` is written in **English** (see above). All other conversational output in **English**.
+All content written to `events/` must be in **Spanish**, with one exception: `investigation.md` is written in **English** (see above). All other conversational output in **English**.

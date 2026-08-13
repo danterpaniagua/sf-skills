@@ -16,9 +16,11 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 |---|---|---|
 | `loyalty-fraud-points` | `/loyalty-fraud-points` | Transfer fraud, accumulation anomaly, manual assignment exploit |
 | `loyalty-fraud-pos` | `/loyalty-fraud-pos` | POS terminal manipulation, franchise network fraud |
+| `loyalty-fraud-dispute` | `/loyalty-fraud-dispute` | Member dispute investigation |
 | `loyalty-dba-investigation` | `/loyalty-dba-investigation` | DBA investigation — PNSSRL |
 | `loyalty-sre-output` | `/loyalty-sre-output` | Formatted outputs for PM, IT, and Jira |
 | `loyalty-azure-nsg` | `/loyalty-azure-nsg` | Azure NSG audit |
+| `loyalty-azure-waf` | `/loyalty-azure-waf` | Azure WAF analysis |
 
 ### `sp-*` — SmartPedidos (Node.js/Express)
 
@@ -55,12 +57,14 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 | Skill | Invocation | Scope |
 |---|---|---|
 | `cloud-azure` | `/cloud-azure` | SmartFran Cloud multi-tenant App Services, Service Bus, franchise onboarding diagnostics, CosmosDB |
+| `cloud-invalid-sale` | `/cloud-invalid-sale` | POS "invalid sale" rejections tied to discounts/promotions/combos — Business & Catalog DB diagnostics |
 
 ### Cross-project
 
 | Skill | Invocation | Scope |
 |---|---|---|
 | `doc-audit` | `/doc-audit` | Documentation and context integrity audit |
+| `context-sync` | `/context-sync` | Post-session audit and update of context files (accuracy, redundancy, token efficiency, completeness) |
 
 ## Structure
 

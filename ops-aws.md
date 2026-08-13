@@ -1,8 +1,8 @@
 # Skill: AWS / SQS Operations Triage
 
-Diagnose and resolve AWS SQS operational issues in platforms-service and concentrador-service.
+Diagnose and resolve AWS operational issues (SQS, ECS/Fargate, ALB) in platforms-service and concentrador-service.
 
-Run this skill when orders are stuck, consumers are down, dead letters are accumulating, or any SQS-related error appears in `logerrors`.
+Run this skill when orders are stuck, consumers are down, dead letters are accumulating, any SQS-related error appears in `logerrors`, or ECS tasks are being killed / CPU is reported high.
 
 ---
 
@@ -241,6 +241,61 @@ db.logerrors.find({
 - High depth + slow PERF → external platform API latency; check `[PERF/INFO]` duration_ms per platform
 - `getQueueAttributes failed` → auto-scaling is blind; child consumers won't spawn; manual ECS scale-out may be needed
 - If depth is sustained > 600 → consider increasing ECS task count directly
+
+---
+
+### F-006 · High CPU / ECS tasks being killed repeatedly (either service)
+
+**Symptom:** Reports of "high CPU" or "health check is killing tasks." Not SQS-specific — this is an ECS/ALB-level pattern. Cluster is `smartfran-pedidos-production` (`us-east-1`); both services sit behind the **same ALB** (`pedidos-concentrador-alb`), different target groups. See `smartpedidos/docs/infrastructure.md` → "Load Balancer / Target Groups" for the current health-check config table — **do not assume both services behave the same way**: concentrador-service's check is a generic, lenient `/` probe (120s timeout / 300s interval) with no app-level health logic in its source; platforms-service's check hits its own `GET /metrics/health-check`, which self-reports HTTP 400 whenever `os.loadavg()[0] > maxCpuLoad` (env, currently `0.7`) — tight ALB threshold (5s timeout / 30s interval / `UnhealthyThreshold: 2`) means a brief CPU blip alone can kill a platforms-service task, but the same blip is very unlikely to kill a concentrador-service task.
+
+**Diagnostic sequence (in order — later steps depend on earlier output):**
+
+1. **Full ECS service-event history**, not just the last few — `describe-services` `events` is capped at ~100 entries and a busy service can burn through all of them within an hour of heavy churn, silently hiding the true incident start:
+   ```bash
+   aws ecs describe-services --cluster smartfran-pedidos-production \
+     --services concentrador-service-production-service platform-service-production-service \
+     --region us-east-1 --profile <profile> \
+     --query 'services[].{name:serviceName,events:events[*].{t:createdAt,m:message}}'
+   ```
+   Look for repeated "stopped N running tasks" entries at a short, regular cadence (e.g. every 2-3 minutes) — that's the kill-loop signature, distinct from a single deployment-driven task swap (which shows exactly one stop/start pair per task, matching a `register-task-definition` revision bump).
+
+2. **`stoppedReason` on the actual stopped tasks**, by explicit task ID (not `list-tasks --desired-status STOPPED` — that filter empties out much sooner than task detail itself ages out, and is unreliable much past ~15 minutes):
+   ```bash
+   aws ecs describe-tasks --cluster smartfran-pedidos-production --tasks <task-id> [<task-id>...] \
+     --region us-east-1 --profile <profile> \
+     --query 'tasks[].{stoppedAt:stoppedAt,stoppedReason:stoppedReason,containers:containers[].{name:name,reason:reason,exitCode:exitCode}}'
+   ```
+   `"Scaling activity initiated by (deployment ...)"` = normal deploy, not a health-check kill. A health-check kill's `stoppedReason` reads along the lines of `"Task failed ELB health checks in target-group ..."`. **This ages out fast** — task detail is typically unrecoverable via this API much beyond ~1 hour post-stop. If it's already gone, CloudTrail `lookup-events` (90-day retention) can still recover `StopTask` events, at the cost of a heavier query — not yet scripted here.
+
+3. **CPUUtilization**, 5-min buckets, both services — distinguishes a brief burst (max spikes, low average) from sustained saturation:
+   ```bash
+   aws cloudwatch get-metric-statistics --namespace AWS/ECS --metric-name CPUUtilization \
+     --dimensions Name=ClusterName,Value=smartfran-pedidos-production Name=ServiceName,Value=<service> \
+     --start-time <ISO8601> --end-time <ISO8601> --period 300 --statistics Average Maximum \
+     --region us-east-1 --profile <profile>
+   ```
+
+4. **Task-definition revision diff**, if a revision bump coincides with the incident — confirms whether it's a capacity change (cpu/memory only) or an actual code/image/env change before assuming either:
+   ```bash
+   aws ecs describe-task-definition --task-definition <family>:<old-rev> --region us-east-1 --profile <profile> \
+     --query 'taskDefinition.{registeredAt:registeredAt,cpu:cpu,memory:memory,containers:containerDefinitions[].{image:image,env:environment}}'
+   # repeat for <new-rev>, diff the two outputs
+   ```
+
+5. **ALB target-group health-check config**, since this determines how sensitive each service actually is to CPU (get the target group ARN from `describe-services` → `loadBalancers[0].targetGroupArn` if not already known):
+   ```bash
+   aws elbv2 describe-target-groups --target-group-arns <tg-arn> --region us-east-1 --profile <profile> \
+     --query 'TargetGroups[].{Path:HealthCheckPath,Timeout:HealthCheckTimeoutSeconds,Interval:HealthCheckIntervalSeconds,Unhealthy:UnhealthyThresholdCount,Matcher:Matcher}'
+   aws elbv2 describe-target-health --target-group-arn <tg-arn> --region us-east-1 --profile <profile>
+   ```
+
+6. **Check for a root cause in the app's own PERF logs before assuming CPU allocation alone is the problem.** A CPU-bound loop is one explanation; a hung outbound dependency is another and doesn't get fixed by scaling up alone. Pull the service's `[PERF/INFO] http_response` entries for the incident window from Graylog and check `duration_ms` and `status` grouped by `msg_rest_url` — an unresponsive third party (seen once: PediGrido's API returning multi-minute latencies and eventual 524/502/503) can saturate a Node process just as effectively as real CPU-bound work, especially if the outbound HTTP client has no configured timeout (check `axios.create()` call sites in the relevant service repo under `smartpedidos/repos/`) and a cron/scheduler fans out requests without a concurrency cap or an overlap guard.
+
+**Remediation:**
+- If it's a genuine capacity problem: bump `cpu`/`memory` on the task definition (does not require a code change, just `register-task-definition` + `update-service --force-new-deployment`) — confirmed effective in the 2026-08-05 incident (see `events/20260805_concentrador-platforms-high-cpu-healthcheck/`), CPU utilization dropped from repeated 75-99% maxes to low single digits after a 4x bump.
+- If it's a hung-dependency problem: capacity alone won't fix it — needs a client-side request timeout and (if on a cron) an overlap guard / concurrency cap in the application code. Flag as a `(Dev)` action item, not just `(SRE)`.
+- If the platforms-service self-reported-unhealthy mechanism is implicated, consider whether the `maxCpuLoad` threshold and/or the ALB's `UnhealthyThreshold`/`Interval` need hysteresis added — as configured, a single ~30-60s load blip is sufficient to kill a task and can cascade (fewer tasks → higher load on survivors → more kills).
+- ALB access logs (bucket `prod-alb-concentrador-logs`) do **not** capture the ALB's own health-check requests (`health_check_logs.s3.enabled: false`) — if this pattern recurs, consider enabling that separately before the next incident, since it would directly show pass/fail history instead of requiring the multi-step inference above. **Reminder:** changing ALB attributes writes state on a prod resource — show the destructive-command banner per root `CLAUDE.md` before presenting that command to the user.
 
 ---
 

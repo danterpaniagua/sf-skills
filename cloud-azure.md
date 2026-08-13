@@ -86,6 +86,35 @@ az monitor app-insights query \
 
 ---
 
+## Windows App Service — console logs can never reach Graylog via this pipeline (platform limitation, not config)
+
+All SmartFran Cloud services share one Serilog pipeline (Console JSON → stdout → `AppServiceConsoleLogs` → Event Hub → Graylog). **This cannot work for Windows App Services (Sales, Pos) at all** — `AppServiceConsoleLogs` isn't a supported/populated Diagnostic Settings category for .NET on Windows (Microsoft only supports it for JavaSE/Tomcat there). Confirmed 2026-08-11 (GITIN-1811), for **Sales-DEV** — full detail in `cloud/docs/infrastructure.md` → "Logging (GSFC-LOG-1)" and `cloud/events/20260810_sales-serilog-console-logs/`. **Linux** App Services (Business, Platform, Person, Admin, Catalog, Orders) work fine — that category *is* supported for containers; don't waste time on any of this for them.
+
+Don't chase this as a config problem — three real gates (`stdoutLogEnabled`, `applicationLogs.fileSystem`, ANCM stdout buffering under `hostingModel="inprocess"`) were found and fixed, confirmed with real CLEF JSON visible live via Kudu Log Stream, and it *still* never reached Graylog after an hour of real traffic. The category itself doesn't ship data off Windows/.NET App Services, full stop. If asked to investigate this again for Sales/Pos (any environment), the diagnostic commands below are still useful for confirming ANCM capture works locally-in-the-file, but **do not present a `web.config`/Application-Logging fix as a solution** — it isn't one. Resolution needs a dev decision (direct GELF sink in Serilog, or the unconfirmed `AppServiceAppLogs`+`AzureMonitorTraceListener` path, or something else) — see `ops.md` in the event folder.
+
+`Sales-PRO`/`Pos-PRO` are unverified, separate from DEV, but subject to the same platform limitation if checked — **always confirm which environment before running these commands**, the RG/subscription differ (PRO: `SmartFran.Cloud.PRO`, subscription `SmartIT Cloud` `85c76dea...`; DEV: `SmartFran.Cloud`, subscription `Smart IT - Grido` `0190fa7d...`) and mixing them up wastes a round of diagnosis on the wrong instance.
+
+```bash
+# Set both together — mixing an app name from one environment with the
+# other's RG/subscription silently queries the wrong resource.
+APP=SmartFran-Cloud-Sales-DEV; RG=SmartFran.Cloud; SUB=0190fa7d-4ccf-4e3d-beb1-323b5780bfc8   # DEV
+# APP=SmartFran-Cloud-Sales-PRO; RG=SmartFran.Cloud.PRO; SUB=85c76dea-3304-4310-8656-bf21b28e4f4b   # PRO
+
+# C1: Read the live web.config via Kudu VFS (AAD token — avoids exposing
+# publishing-credentials passwords via list-publishing-credentials)
+TOKEN=$(az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://$(echo "$APP" | tr '[:upper:]' '[:lower:]').scm.azurewebsites.net/api/vfs/site/wwwroot/web.config"
+
+# C2: Application Logging (Filesystem) — second gate; must also not be "Off"
+# for the platform to collect the stdout file even if capture is enabled
+az webapp log show --name $APP --resource-group $RG --subscription $SUB -o json
+```
+
+Sources: [Azure Web app (Windows) console logs not showing in AppServiceConsoleLogs — Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/2147544/azure-web-app-(window)-asp-net-api-console-logs-ar), [AppServiceAppLogs is now available for ASP .NET apps on Windows](https://azure.github.io/AppService/2020/08/31/AzMon-AppServiceAppLogs.html).
+
+---
+
 ## Azure Service Bus — DLQ Monitoring
 
 **Portal:** Service Bus namespace → **Metrics** → metric `Dead-lettered messages`, split by Entity Name (per topic/queue). For prebuilt dashboards: namespace → **Insights**.

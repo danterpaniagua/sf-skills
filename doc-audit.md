@@ -87,7 +87,7 @@ Explicit cross-references between files (e.g., "see `sre-output` for column spec
 ### Low — naming and formatting
 
 **L1 — Event naming convention**
-Any file that specifies event subfolder or file naming must use the canonical form from `CLAUDE.md`: subfolder `events/YYYYMMDD_description/`, files `YYYYMMDD_description_audience.ext`. Flag deviations.
+Any file that specifies event subfolder or file naming must use the canonical form from `CLAUDE.md`: subfolder `events/YYYYMMDD_description/`, files named by suffix only — no `YYYYMMDD_description_` prefix (e.g. `investigation.md`, `ops.md`, `ops-events.md`, `scripts.sh`, `email_ops.md`, `email_pm.md`). The folder name already disambiguates; the prefix on every file inside it is redundant. Flag deviations, including any lingering long-form filenames in older events — those are grandfathered, not violations, but new events must use the short form.
 
 **L2 — Read-only constraint scope**
 `CLAUDE.md` prohibits DML/DDL against any database. `loyalty-azure-nsg.md` prohibits write Azure CLI commands unless explicitly requested. Verify these are not narrower or broader than intended.

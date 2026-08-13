@@ -9,7 +9,7 @@ Identify the query responsible for a database event given a time window.
 3. Run a data availability check on `PNSSRL_AuditSysprocesses` for the window.
 4. Query capture tables using CPU delta per SPID between consecutive snapshots.
 5. Cross-reference results to identify the responsible query/session.
-6. Capture full query text from `PNSSRL_TempdbProc.Query_Text` for the responsible SPID. Provide it for the user to save as `YYYYMMDD_description_queryXXX.sql` in the event subfolder before generating any output ticket.
+6. Capture full query text from `PNSSRL_TempdbProc.Query_Text` for the responsible SPID. Provide it for the user to save as `queryXXX.sql` in the event subfolder before generating any output ticket.
 
 ## Capture Tables
 
@@ -50,6 +50,18 @@ Retention: **90 days** (except `PNSSRL_DetallesEjecucionTablasModulos`: 20 days)
 | `OutStanding_internal_objects_page_counts` | Tempdb internal object pages (sorts, spills) |
 | `granted_query_memory` | Memory grant pages |
 | `HOST_NAME` / `login_name` / `program_name` | Session identity |
+
+## OS-Level Diagnostics (beyond `PNSSRL` capture tables)
+
+When a DB-host CPU/OS-level question (Windows Update, Windows Defender, Scheduled Tasks, `logman`/Performance Monitor, Resource Monitor) can't be answered from `PNSSRL` and needs a PowerShell command run directly on a server, **never assume which host the user's RDP session is actually on.** Multiple hosts are in play (`SFCG-DB01`, `SFCG-TO-01`, web/mobile app servers) and RDP access does not necessarily default to the one relevant to the investigation.
+
+**Confirmed incident (2026-08-03, `GITIN-1749`):** an entire battery of OS-level checks (Windows Update history, Defender scan/detection, Scheduled Task inventory, `logman` Data Collector Sets) was run under the assumption of `SFCG-DB01`, but the user's RDP session was actually on `SFCG-TO-01` the whole time. Went undetected until a `logman`/`relog` CSV export exposed `\\SFCG-TO-01\...` counter prefixes — every prior "ruled out" conclusion had to be redone from scratch on the correct host.
+
+**Rule:** every PowerShell command block for OS-level diagnostics must open with a hostname stamp, e.g.:
+```powershell
+"Running on: $env:COMPUTERNAME"
+```
+Treat the returned hostname as the ground truth for which host the rest of that command's output describes — don't rely on which host you *intended* to target. If the user hasn't confirmed the hostname recently in the conversation, ask before trusting new output, especially when switching between checking `SFCG-DB01` (the SQL Server engine) vs. `SFCG-TO-01` (TaskOperatorService, hosts its own `\SmartFran\` Scheduled Task folder — see `loyalty/docs/infrastructure.md`).
 
 ## Known Infrastructure
 

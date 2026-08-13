@@ -75,7 +75,7 @@ This path produces no hub/relay memory update — the member is the disputant, n
 
 ---
 
-## Evidence Package — Closure (`_ops.md`)
+## Evidence Package — Closure (`ops.md`)
 
 Single-account scope — the three network-wide metrics (Clientes únicos, etc.) collapse to 1 and can be noted as such rather than omitted. Required sections:
 

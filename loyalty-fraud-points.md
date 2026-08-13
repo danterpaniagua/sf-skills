@@ -532,9 +532,9 @@ And project these columns:
 
 Place all files under `events/YYYYMMDD_fraude_transferencias/`.
 
-### Accumulation anomaly closure (`_ops.md`)
+### Accumulation anomaly closure (`ops.md`)
 
-Required sections in `YYYYMMDD_description_ops.md`:
+Required sections in `ops.md`:
 
 1. **Metrics table** — Eventos totales, Puntos totales, Ventana activa, Clientes únicos, Transacciones POS, Asignaciones manuales, Transferencias, Límites superados.
 2. **EventTypeCode breakdown** — one row per code: EventTypeCode | Eventos | Puntos. Source: Q1.
@@ -544,7 +544,7 @@ Place under `events/YYYYMMDD_description/`.
 
 ### Points accounting — required in every analysis output
 
-Every investigation analysis (inline and in `_ops.md`) must cover two axes per actor:
+Every investigation analysis (inline and in `ops.md`) must cover two axes per actor:
 
 #### Axis 1 — Account origin and identity validation (mandatory for every actor)
 
@@ -610,7 +610,7 @@ If a downstream account balance is unknown mark the cell `(pendiente)` and flag 
 
 > **Never assume point statuses from prior analysis or session memory.** Every cell in the accounting table must be backed by a query result from the current investigation. Use `smlst.CustomerPointsLog` to confirm current balances; use `sml.CustomerPointsLog` aggregated by `EventTypeCode` to confirm spent/transferred totals.
 
-### Manual assignment exploit closure (`_ops.md`)
+### Manual assignment exploit closure (`ops.md`)
 
 Same three required sections as accumulation anomaly, plus:
 
