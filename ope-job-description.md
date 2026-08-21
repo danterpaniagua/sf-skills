@@ -6,11 +6,12 @@ Keep the three role job-description documents in `operations/docs/` accurate aga
 
 | File | Scope | Contains comparison tables? |
 |---|---|---|
-| `operations/docs/job_description_completa.md` | Combined Operations + SRE + DevOps — the recommended profile to publish unless Dirección splits the team | Yes — the only file with the "por qué un solo documento" note and the "División de foco por rol" stack table. Both must stay three-column (Operations / SRE / DevOps) since all three sibling docs exist. |
+| `operations/docs/job_description_completa.md` | Combined Operations + SRE + DevOps — the recommended profile to publish unless Dirección splits the team | Yes — the only file with the "por qué un solo documento" note and the "División de foco por rol" stack table. Both must stay three-column (Operations / SRE / DevOps) since all three sibling roles exist. |
+| `operations/docs/job_description_operations.md` | Operations only, trimmed | No — plain JD, one-line pointer to siblings only |
 | `operations/docs/job_description_sre.md` | SRE only, trimmed | No — plain JD, one-line pointer to siblings only |
 | `operations/docs/job_description_devops.md` | DevOps only, trimmed | No — plain JD, one-line pointer to siblings only |
 
-There is no standalone `job_description_operations.md` — Operations-specific responsibilities live only inside `job_description_completa.md`.
+All four files' sibling-reference line (the `> Origen:` blockquote at the top) must list the other three by name — check all four, not just the one(s) you edited, when this list changes.
 
 Each file's shape: Resumen del puesto → Responsabilidades principales → Stack tecnológico → Requisitos excluyentes → Requisitos deseables → Seniority sugerido. Match existing section order and heading style exactly — don't restructure.
 
@@ -21,11 +22,11 @@ Each file's shape: Resumen del puesto → Responsabilidades principales → Stac
 
 ## Evidence sources — check all, don't guess
 
-1. **`.claude/commands/*.md`** (and subdirectory-scoped `.claude/commands/` where they exist) across every repo in scope: `bots/` (root + any per-subproject commands), `cloud-graylog/`, `smartfran/sp-logs/`, and any other sibling repo the user names. Each skill file's stated scope is a claim about real capability — read it, don't infer from the filename alone.
+1. **`.claude/commands/*.md`** (and subdirectory-scoped `.claude/commands/` where they exist) across every repo in scope: `bots/` (root + any per-subproject commands), `cloud-graylog/`, `smartfran/sp-logs/`, `smartfran/sf-devops/`, and any other sibling repo the user names. Each skill file's stated scope is a claim about real capability — read it, don't infer from the filename alone. `sf-devops/` has no `.claude/commands/` skill files of its own (only `CLAUDE.md` + `jenkins/*/*.md` docs) — for this repo, evidence comes from those docs directly: Jenkins CI/CD pipeline-as-code (SCM-read Jenkinsfiles, per-stack shared Groovy library), Trivy container scanning, and AI-augmented pipeline stages (LLM CLI invoked by Jenkins for PR diff analysis and changelog generation) — see `job_description_devops.md`/`job_description_completa.md` for what's already captured from it as of 2026-08-14.
 2. **Actual session evidence** — a real incident investigated, a real file read, a real root cause found. A capability described in a skill file but never actually exercised is weaker evidence than something demonstrably done (e.g. the UberEats scoping-bug investigation was concrete evidence for "root-cause across app code + logs + infra + git history," not just a skill description).
 3. **Project `CLAUDE.md` files** for stack/architecture details a skill file might reference but not spell out (DB names, cloud providers, service names).
 
-Cross-check every candidate addition against what's *already* in the target doc(s) — don't duplicate an existing stack-table entry, extend it in place instead (see how `PostgreSQL (replicación streaming primary/replica)` became `PostgreSQL (administración completa: tuning, capacity planning, replicación streaming primary/replica, troubleshooting operativo)` rather than a second bullet).
+Cross-check every candidate addition against what's *already* in the target doc(s) — don't duplicate an existing stack-table entry, extend it in place instead (see how, in `completa.md`/`sre.md`, `PostgreSQL (replicación streaming primary/replica)` became `PostgreSQL (administración completa: tuning, capacity planning, replicación streaming primary/replica, troubleshooting operativo)` rather than a second bullet). This can mean different depth in different files for the *same* technology, not just presence/absence: `operations.md`'s Bases de datos row deliberately keeps PostgreSQL at "mantenimiento operativo... no investigación de causa raíz ni tuning activo" — extend a file's own row to match what that role actually does, don't copy another file's more detailed wording over.
 
 ## Deciding which file(s) a capability belongs in
 
@@ -33,7 +34,7 @@ Always add genuinely new capability to `job_description_completa.md` — it's th
 
 - **Reactive, root-cause, investigation-driven** (an incident, a "why did X happen" question, cross-layer diagnosis) → also add to `job_description_sre.md`.
 - **Build/deploy/provisioning-driven** (a pipeline, IaC, a repeatable environment, a release) → also add to `job_description_devops.md`.
-- **Schedule-driven, routine maintenance** (cert renewal, credential rotation, routine config with no design element) → `job_description_completa.md` only; there's no trimmed Operations doc to add it to.
+- **Schedule-driven, routine maintenance** (cert renewal, credential rotation, routine config with no design element) → also add to `job_description_operations.md`.
 - **Proactive but design-heavy work** (architecting a new monitoring/telemetry integration from scratch for a previously-unobserved critical service, not just flipping on a template) sits closer to Operations in trigger but is still real observability-*design* work — add to `job_description_sre.md` too, since both docs already carry a general "diseñar el stack de observabilidad" responsibility. Don't let the trigger-type heuristic override that overlap when the SRE doc already claims the broader design responsibility this is a concrete instance of.
 - If a capability doesn't obviously map to a trigger type, ask rather than guess — this determines which files get edited, not just wording.
 
@@ -55,6 +56,6 @@ Spanish, matching the existing docs — these are real hiring documents, not tra
 ## Guardrails
 
 - Never invent a capability that isn't backed by a skill file's stated scope or actual demonstrated work in this repo's history.
-- Don't duplicate content across the three files beyond what's structurally necessary (each trimmed doc repeats only what applies to *that* role, not the full combined text).
+- Don't duplicate content across the four files beyond what's structurally necessary (each trimmed doc repeats only what applies to *that* role, not the full combined text).
 - If removing/narrowing a prior addition (e.g. "DBA yes, fraud investigation no" — a real correction from an earlier session), remove it from every file it was added to, not just the one most recently discussed — grep for the term across all three files to confirm full cleanup before reporting done.
 - After edits, do a final `grep` pass across all three files for the term(s) involved to confirm the intended file set (and only that set) contains the addition.

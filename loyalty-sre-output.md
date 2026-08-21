@@ -54,6 +54,8 @@ Append-only work journal. One entry per meaningful action: investigation step, q
 
 **Voice:** first person throughout, pretérito perfecto — Dante narrating his own work ("confirmé", "detecté", "extraje"). Never third person ("el usuario pidió", "el usuario confirmó") and never impersonal ("se ha confirmado"). This applies even when narrating a request or a fact Dante provided in conversation — write it as his own action or finding, not as something reported to/by an external "usuario". Facts about external events (e.g. a VM restart) stay factual/passive if Dante didn't perform them himself (`se reinició la VM`, not `reinicié la VM`) — only the investigation actions are first person. Also never frame a decision/pivot as receiving an order from an external party ("he recibido la indicación de...", "a pedido de...") — that still implies a commander/executor hierarchy even without naming "el usuario". State the decision as a direct fact/action instead.
 
+**Mandatory check:** after every Edit/Write to `ops-events.md`, invoke `/voice-check` on that file before treating the entry as done. Recalling this rule from memory alone has repeatedly failed to catch violations — only the mechanized grep in `voice-check.md` has.
+
 ```markdown
 # Eventos — YYYYMMDD_description
 

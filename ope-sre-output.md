@@ -85,11 +85,19 @@ Mark any command that modifies state with `⚠️` in the Propósito column.
 <command>
 ```
 
+## Graylog Pipeline Mitigations — Validation Requirement
+
+When a fix takes the form of a Graylog Pipeline Rule attached to a stream, a simulator pass alone is not sufficient confirmation — the simulator only proves the rule's logic is correct given a message already routed to that stream, it does not prove the stream actually receives the traffic the fix targets. Before writing "confirmed"/"mitigado" anywhere in `investigation.md` or `ops.md`, verify the stream's own routing rules (`GET /api/streams/{id}/rules`) actually match the traffic in question — do not infer stream scope from a source-code match (e.g. "this service's code matches, so its stream must be the one routing this index's traffic") without checking. Then confirm on real live traffic the same way any other fix in this project is confirmed (a doc-count delta, an `_exists_` search, or absence of the previously-seen indexer failure) before treating the mitigation as validated.
+
+Confirmed gap (GITIN-1854, 2026-08-15): a `msg_rest_status` sanitization rule passed cleanly in the simulator, but the underlying stream attachment (`SP_Concentrador`) was never checked against its actual routing rules — inferred instead from a source-code match. The same failure class continued on live traffic within the hour, undetected until the next round of indexer-failure evidence was pasted back.
+
 ## Ops Events File (`ops-events.md`)
 
 Append-only work journal. One entry per meaningful action: investigation step, remediation applied, finding, status update, or follow-up. Never edit past entries.
 
 **Tense:** pretérito perfecto, true first person — "he verificado", "he identificado", "he confirmado". Yo soy quien ejecuta. Never refer to the author as "el usuario", "el operador", or any third-person subject, and never use the impersonal "se ha..." construction. Also never frame a decision/pivot as receiving an order from an external party ("he recibido la indicación de...", "a pedido de...") — that still implies a commander/executor hierarchy even without naming "el usuario". State the decision as a direct fact/action instead: "No toco el stream por ahora" / "He retomado X", not "He recibido la indicación de no tocar/retomar X".
+
+**Mandatory check:** after every Edit/Write to `ops-events.md`, invoke `/voice-check` on that file before treating the entry as done. Recalling this rule from memory alone has repeatedly failed to catch violations — only the mechanized grep in `voice-check.md` has.
 
 ```markdown
 # Eventos — YYYYMMDD_description
@@ -113,7 +121,7 @@ Write in Spanish. This is a **Jira ticket describing work to be done** — use f
 
 Use exactly these sections in this order:
 
-**Resumen** — one paragraph: what happened, when, which system/platform, severity.
+**Resumen** — one paragraph. Open with the problem/gap that existed *before* any work started — not with what was done — then which system/platform, severity, when detected. This framing doesn't change based on whether the ticket is drafted before or after the work: even a ticket written entirely after the fact, for planned/proactive work with no incident trigger, must state the motivating problem or objective first (e.g. "N apps lacked X, leaving Y exposed") before describing what was implemented. The chronological account of what was actually done belongs in `ops-events.md` — don't let this paragraph collapse into a "here's what we did" report just because the work is already finished.
 
 **Tabla resumen** — key event metadata:
 
@@ -153,6 +161,7 @@ Use exactly these sections in this order:
 - **No code of any kind** in the email body — scripts file carries the detail.
 - Reference the Jira ticket ID — never a local repo path (e.g. `operations/events/...`, `cloud/events/...`). Ask the user for the Jira ID first if not already known (see root `CLAUDE.md` → "External References").
 - Describe the incident and proposed actions in plain technical language.
+- **Exception for architecture/design proposal emails** (not incident-closure emails): when the email's purpose is to get a peer to evaluate a design trade-off — not to report an incident's status — Mermaid diagrams comparing current vs. proposed flow, and brief `file:line`/controller-name references, are acceptable. The reader needs enough to actually evaluate the trade-off, which plain prose alone often can't carry for an architecture change. The "no code" rule still applies in full to incident-status/closure emails, where the ticket already carries that detail and the email should stay pure narrative.
 
 ## Emails to PMs
 

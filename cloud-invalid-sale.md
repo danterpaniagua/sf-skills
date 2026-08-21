@@ -5,8 +5,10 @@ Diagnostic workflow for SmartFran Cloud POS sales rejected as invalid ("La venta
 ## Scope
 
 - POS checkout rejections tied to combos, promotions, or discount/financial-modifier line items.
+- Also applicable to combo/promotion *display* defects (wrong number of options, wrong articles shown) even when no sale rejection is involved — same `Promotions`/`PromotionGroups`/`PromotionDetails` data and same POS combo-builder code path apply. Confirmed reusable for this in WEISS `20260816_clasica-dijon-invalid-sale-weiss`.
 - Distinguishing a genuine code/validation defect from a Catalog/Business data-configuration error.
 - Not for infra-level issues (App Service, Service Bus, CosmosDB availability) — use `/cloud-azure` for those.
+- **Not for third-party marketplace/delivery-platform catalogs** (PedidosYa, Rappi, etc.) — see "Marketplace/delivery-platform catalogs are a different system" below before spending diagnostic time here on a bug reported from one of those apps.
 
 ## The error itself is generic — don't over-read it
 
@@ -152,13 +154,32 @@ WHERE d.ArticleId = <item id>;
 |---|---|---|
 | `Sales-<TENANT>` | `Sales` — partition key `[FranchiseeCode, FranchiseCode, PosCode]` (the container this skill actually queries) | Full container list for `Sales-<TENANT>` is in `cloud/docs/infrastructure.md` (authoritative). Only **passing** sales appear in `Sales` — see "Getting real per-line data" above for rejected sales. |
 
+## Marketplace/delivery-platform catalogs are a different system — check before diagnosing in Business/Catalog DB
+
+If the reported bug comes from a **marketplace/delivery-platform app screen** (PedidosYa, Rappi, UberEats, etc. — recognizable by mobile-app-style UI, not the internal Blazor POS admin styling), don't assume it's derived from `Business_<TENANT>`/`Catalog_<TENANT>` at all. Confirmed in WEISS `20260816_clasica-dijon-invalid-sale-weiss` (a combo showing 3 burger options instead of 2, on PedidosYa's app):
+
+- `repo/SmartFran.Cloud` has **no menu/catalog export code to any marketplace** — searched (`grep -rli "pedidosya"`) and found only order-*receiving* logging enums (`PedidosYaOrderPhases`/`PedidosYaOrderSteps`/`PedidosYaOrder`), nothing that pushes `PromotionGroups`/`PromotionDetails` outward.
+- `smartpedidos/` (a separate sub-project, its own repos `dev-scr-smartPedidos-platformsService`/`dev-src-smartPedidos-concentradorService`) does have a real PedidosYa integration — but it's order-lifecycle only (`receiveOrder`, `confirmOrder`, `branchRejectOrder`, `dispatchOrder`, parsing an *incoming* order's `selectedToppings`). `grep -rli "menu"` across both SmartPedidos repos returns **zero results** — it never touches menu/catalog publishing either.
+- Conclusion: a marketplace app's own menu/catalog is configured directly on that platform's merchant portal, independent of `Business_<TENANT>`/`Catalog_<TENANT>` and of SmartPedidos. Confirm this pattern once per marketplace rather than re-deriving it — but do verify the source screen first (ask for a screenshot if not obviously stated) before ruling Business/Catalog DB out, since an internal POS screen and a marketplace app screen can report visually similar symptoms.
+
+Before concluding a promo/combo display bug is marketplace-side, still confirm the *internal* POS/data side is clean first (Business/Catalog DB query + a trace of `DialogBuildCombo.razor.cs`'s `GetItems(groupId)`/`GetPriceDetails(groupId)`, which build each group's option list strictly from that group's own `PromotionDetails.ArticleId` rows) — only once both come back correct is "external marketplace catalog" the safe conclusion, not a shortcut to reach for first.
+
 ## Tooling note: `USE` does not switch databases in Azure SQL
 
 These tenant databases are **Azure SQL Database**, not on-prem/IaaS SQL Server — each database is a fully separate connection scope, and a `USE [OtherDatabase];` statement inside a query is silently a no-op (it does not error, it just doesn't do anything). If a query fails with "Invalid object name" for a table you know exists, the first thing to check is which database the query tool is actually connected to (`SELECT DB_NAME();`), and switch it via the tool's **connection picker**, not via SQL.
 
-## Worked example
+## Tooling note: `repo/SmartFran.Cloud` tracks `dev`, not production — verify before trusting a source trace
 
-Full investigation, including every dead end, the eventual mockup validation, and where that mockup's prediction was wrong: `cloud/events/20260802_promocion-invalida-weiss-franui/` (`_investigation.md` for the narrative, `_scripts.py` for the runnable mockup). Confirmed exactly: a discount item named "...100%" was priced at `99.99`, and the residual this leaves on a clean whole-dollar subtotal is deterministically `subtotal × 0.0001` — reproduced the real reported amounts ($0.14 / $0.17) to the cent. **Not fully confirmed**: the precise reason a combo-structured line passes while a plain-item line fails with the same discount — the leading explanation (validation-total vs. display-total divergence) is well-supported by source but wasn't closed with real payload data.
+The local clone tracks `origin/dev` and can lag behind by many commits (confirmed 13 commits behind in the WEISS 20260816 case — `git fetch origin && git pull --ff-only origin dev` before relying on it). More importantly, for **production** bug diagnosis, `origin/dev` and `origin/main` (the actual PRO release branch) diverge — confirmed ~30 commits different either direction on 2026-08-16. Before treating a source-code trace as applicable to a live production bug, diff the specific files read against `origin/main`:
+```bash
+git diff origin/main origin/dev --stat -- "<file path>" "<file path 2>"
+```
+If a file differs, read the `origin/main` version instead (or confirm the diff doesn't touch the relevant function) before drawing conclusions — don't assume `dev` behavior matches what's actually deployed.
+
+## Worked examples
+
+- `cloud/events/20260802_promocion-invalida-weiss-franui/` (`_investigation.md` for the narrative, `_scripts.py` for the runnable mockup) — a genuine `SaleIsInvalid` rejection. Confirmed exactly: a discount item named "...100%" was priced at `99.99`, and the residual this leaves on a clean whole-dollar subtotal is deterministically `subtotal × 0.0001` — reproduced the real reported amounts ($0.14 / $0.17) to the cent. **Not fully confirmed**: the precise reason a combo-structured line passes while a plain-item line fails with the same discount — the leading explanation (validation-total vs. display-total divergence) is well-supported by source but wasn't closed with real payload data.
+- `cloud/events/20260816_clasica-dijon-invalid-sale-weiss/` — not a rejection at all, a combo *display* defect (3 burger options shown instead of 2) reported from a marketplace app (PedidosYa), not the internal POS. `Business_WEISS`/`Catalog_WEISS` data confirmed clean, internal POS combo-builder confirmed correct via screenshot + source trace, root cause isolated to PedidosYa's own menu configuration (external, unfixable from SmartFran side). See "Marketplace/delivery-platform catalogs are a different system" above — this is the case that established that section.
 
 ## Constraints
 

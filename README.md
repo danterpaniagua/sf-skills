@@ -21,6 +21,7 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 | `loyalty-sre-output` | `/loyalty-sre-output` | Formatted outputs for PM, IT, and Jira |
 | `loyalty-azure-nsg` | `/loyalty-azure-nsg` | Azure NSG audit |
 | `loyalty-azure-waf` | `/loyalty-azure-waf` | Azure WAF analysis |
+| `loyalty-static-analysis` | `/loyalty-static-analysis` | Static analysis for critical defects and vulnerabilities (.NET/WCF) |
 
 ### `sp-*` — SmartPedidos (Node.js/Express)
 
@@ -51,6 +52,7 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 | `ope-aws` | `/ope-aws` | EC2, SQS, CloudWatch, IAM review, ECS, Fargate, ALB/NLB |
 | `ope-zabbix` | `/ope-zabbix` | Custom healthcheck-to-Zabbix integration: UserParameter items, macros, triggers, alert routing |
 | `ope-sre-output` | `/ope-sre-output` | Event artifacts: Jira tickets, closure reports, emails, ops-events log |
+| `ope-static-analysis` | `/ope-static-analysis` | Static analysis for critical defects and vulnerabilities (Bash/Python/PowerShell) |
 
 ### `cloud-*` — Cloud Infrastructure (Azure, SmartFran Cloud)
 
@@ -58,6 +60,7 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 |---|---|---|
 | `cloud-azure` | `/cloud-azure` | SmartFran Cloud multi-tenant App Services, Service Bus, franchise onboarding diagnostics, CosmosDB |
 | `cloud-invalid-sale` | `/cloud-invalid-sale` | POS "invalid sale" rejections tied to discounts/promotions/combos — Business & Catalog DB diagnostics |
+| `cloud-static-analysis` | `/cloud-static-analysis` | Static analysis for critical defects and vulnerabilities (.NET multi-tenant) |
 
 ### Cross-project
 
@@ -65,6 +68,7 @@ git submodule add git@github.com:danterpaniagua/sf-skills.git .claude/commands
 |---|---|---|
 | `doc-audit` | `/doc-audit` | Documentation and context integrity audit |
 | `context-sync` | `/context-sync` | Post-session audit and update of context files (accuracy, redundancy, token efficiency, completeness) |
+| `voice-check` | `/voice-check` | Mechanized first-person/tense audit of `ops-events.md` files |
 
 ## Structure
 

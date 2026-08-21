@@ -63,6 +63,10 @@ Once `Status: converged`, write the main ticket from this file's final state onl
 
 Append-only work journal. One entry per meaningful action: investigation step, finding, remediation applied, status update, or follow-up. Never edit past entries.
 
+**Voice:** first person throughout, pretérito perfecto — "he verificado", "he confirmado", not simple past or third person/impersonal. Full rule (tense, person, no order-attribution framing, legitimate passive-voice exception) is defined once in `voice-check.md` — not duplicated here.
+
+**Mandatory check:** after every Edit/Write to `ops-events.md`, invoke `/voice-check` on that file before treating the entry as done. Recalling the rule from memory alone has repeatedly failed to catch violations in this and other projects — only the mechanized grep in `voice-check.md` has.
+
 ```markdown
 # Eventos — YYYYMMDD_description
 
@@ -163,6 +167,7 @@ Use exactly these sections in this order:
 - **No code of any kind** — no JS snippets, no MongoDB queries, no config fragments. Technical detail belongs in Jira tickets.
 - Reference the Jira ticket ID and service name — never a local repo path. Ask the user for the Jira ID first if not already known (see root `CLAUDE.md` → "External References").
 - Describe the problem and proposed actions in plain technical language.
+- **Exception for architecture/design proposal emails** (not incident-closure emails): when the email's purpose is to get a peer to evaluate a design trade-off — not to report an incident's status — Mermaid diagrams comparing current vs. proposed flow, and brief `file:line`/controller-name references, are acceptable. The reader needs enough to actually evaluate the trade-off, which plain prose alone often can't carry for an architecture change. The "no code" rule still applies in full to incident-status/closure emails, where the ticket already carries that detail and the email should stay pure narrative.
 
 ## Emails to PMs
 
