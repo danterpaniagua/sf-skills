@@ -35,7 +35,7 @@ Additional files as needed: `scripts.sh`, `scripts.js`, `email_ops.md`, `email_p
 
 ## Investigation File (`investigation.md`)
 
-Create this **first**, before the main ticket exists. Its job is to absorb the messy part of an investigation — working theories about a root cause, reversed conclusions, dead ends — so the ticket never has to. Write in English. Unlike `ops-events.md`, this file is **not append-only** — rewrite sections in place as understanding changes; it should always reflect current best understanding, not a historical trail of every theory that got discarded.
+Create this **first**, before the main ticket exists. Its job is to absorb the messy part of an investigation — working theories about a root cause, reversed conclusions, dead ends — so the ticket never has to. Write in English. Unlike `ops-events.md`, this file is **not append-only** — rewrite sections in place as understanding changes; it should always reflect current best understanding, not a historical trail of every theory that got discarded. Once converged, write `ops.md` from this file's final state — except a `## Team Only` section, if present, which never gets promoted into `ops.md` — see root `CLAUDE.md` → "Investigation Files (cross-project)".
 
 Also serves as a resumption point: if investigation spans multiple sessions, read this file first before re-deriving anything from raw command/query output.
 
@@ -74,6 +74,10 @@ Append-only work journal. One entry per meaningful action: investigation step, f
 
 Descripción del trabajo realizado, hallazgo o estado.
 ```
+
+**Cross-reference into another ticket's `ops-events.md` when work done here changes the operational state of a resource that ticket owns** — not just when it's *about* that resource. Example (2026-09-03, `20260902_error-message-alerting/` / GITIN-1979): a `CloudWatch Alarm` was added on `mongo-to-s3-CFN-ScheduledMongoToS3-1EZXBGD94CJVO`, a Lambda whose deploys/config live under GITIN-1970's `20260831_lambda-s3-export-utc3/`. The alarm's actual build was logged fully in GITIN-1979's own event log (that's where the real work happened), but a short cross-reference entry was also added to GITIN-1970's `ops-events.md` — pointing back to the other folder for detail — so that folder's own history of "what changed about this function" stays complete without duplicating the full write-up.
+
+**`ops.md`'s `Resuelto` status is not write-once.** If a ticket is marked resolved/deployed and then the deployed thing changes again later in the same investigation (a feature added post-close is reduced in scope, a config reverted, a channel disabled) — update `Resuelto` and the relevant `Hallazgos`/`Acciones propuestas` rows again, don't leave the ticket describing a state that's no longer true. Example: GITIN-1979's `Resuelto` field was updated a second time the same day when the Google Chat notification channel it had just shipped was deactivated (too verbose) — the field now says both "deployed and validated" and "Chat channel deactivated, email-only," not just the first fact.
 
 ## Jira Ticket Structure
 
@@ -154,9 +158,11 @@ Use exactly these sections in this order:
 |---|---|---|
 | C1 | | |
 
+Every command's real output belongs in the event's `data/` directory (redirected by the command itself, or persisted by Claude when the user pastes it into chat instead) — see root `CLAUDE.md` → "Command/Query Output — Persist as Evidence". This table references those files, it never inlines their content.
+
 **Acciones propuestas** — numbered list. Each action references the responsible team (Dev / SRE / Infra).
 
-**Hallazgos secundarios** — optional section for findings outside the primary incident scope.
+**Hallazgos secundarios** — optional section for findings outside the primary incident scope. Must be findings about the system/incident under investigation — never a bug found in a tool or script used to *investigate* the incident. Tooling bugs aren't event findings; they don't belong in the ticket at all.
 
 ---
 
@@ -177,5 +183,5 @@ Use exactly these sections in this order:
 - Never mention internal SRE work: findings files, log antipatterns, refactor plans, access changes.
 - "Próximos pasos" includes only actions visible to PMs (platform changes, service recovery steps). If only internal actions remain, omit the section entirely.
 - **Never flatten hedged findings into certainty.** If the source ticket/investigation calls something circumstantial, proposed-but-undecided, or unconfirmed, the email must keep an equivalent hedge or omit the claim — never state it as settled fact just because the summary is shorter. Applies to causal links ("como consecuencia" implies confirmed causation — don't write it if the source only says "consistent with"), future actions ("vamos a hacer X" means it was actually decided, not merely proposed in an action-item list), and outcomes ("resuelto", "sin impacto", "volvió a la normalidad") — only state these if something was actually checked at that level, not inferred from a lower-level signal like CPU or task-restart counts.
-- Do not reference MongoDB collection names, SQS queue names, or internal service names in PM emails.
-- May mention the real Jira ticket ID for "more information" once it's confirmed to exist (see root `CLAUDE.md` → "External References") — that's a valid, clickable reference. Never use internal findings/script markers like `(H1)`/`(C3)` in a PM email, and never a local repo path — neither resolves to anything a PM could open.
+- Do not reference MongoDB collection names, SQS queue names, or internal infrastructure/resource names in PM emails. This does **not** cover the product names themselves (Concentrador, Platform) — the PM already manages and knows their own product by that name, so use it directly rather than a periphrastic description ("el sistema que gestiona sucursales"). Confirmed 2026-09-08 (GITIN-2000/GITIN-2002 axios/tar email): a draft over-explained "Concentrador" and "Platform" as generic descriptions to avoid what looked like an internal name, and the user corrected it — the rule is about infra/data-layer names, not the product names a PM-facing email is about in the first place.
+- For "more information," use the actual Jira ticket **URL** (see root `CLAUDE.md` → "External References"), not just the bare ID — a bare ID isn't clickable, the URL is what actually lets the PM get there directly. Never use internal findings/script markers like `(H1)`/`(C3)` in a PM email, and never a local repo path — neither resolves to anything a PM could open.

@@ -269,7 +269,7 @@ Limits are stored in `Sml.LocationAttributeValue` (LocationId = 1) and differ by
 
 **Step 0b:** Convert user's time window (default UTC-3) to GMT. Query window = event ±2h.
 
-**Step 0c:** As participant identities are resolved (Q4 / identity resolution), apply the **Name & Identity Flags** rules below to every row. Flag suspicious names inline in the analysis — do not wait until the end.
+**Step 0c:** As participant identities are resolved (Transfer fraud step 3 — Identity resolution), apply the **Name & Identity Flags** rules below to every row. Flag suspicious names inline in the analysis — do not wait until the end.
 
 ### Transfer fraud
 
@@ -363,7 +363,7 @@ Without the outer parentheses, `AND` binds before `OR` and any additional filter
 
 ## Name & Identity Flags
 
-Apply these checks to every participant resolved in Q4 / identity resolution. Flag inline — do not defer.
+Apply these checks to every participant resolved in Transfer fraud step 3 (Identity resolution). Flag inline — do not defer.
 
 ### DNI validity (Southern Cone context)
 

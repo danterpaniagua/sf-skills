@@ -5,11 +5,34 @@ Identify the query responsible for a database event given a time window.
 ## Investigation Workflow
 
 1. User provides the event time window. Convert to GMT (+3h from UTC-3).
-2. Output queries as copy-paste blocks — never execute them directly. User runs them on the server and pastes results back.
+2. Output queries as copy-paste blocks — never execute them directly. User runs them on the server and pastes results back. **Every standalone query block needs its own `USE <database>;`** — don't rely on session/database context carrying over from a previous block (confirmed gap, GITIN-2036: two queries in the same `scripts.sql` were missing this and would have silently run against the wrong database or failed).
 3. Run a data availability check on `PNSSRL_AuditSysprocesses` for the window.
 4. Query capture tables using CPU delta per SPID between consecutive snapshots.
 5. Cross-reference results to identify the responsible query/session.
 6. Capture full query text from `PNSSRL_TempdbProc.Query_Text` for the responsible SPID. Provide it for the user to save as `queryXXX.sql` in the event subfolder before generating any output ticket.
+
+## Validating a Proposed Query/Index Fix (established 2026-09-21)
+
+Before proposing an index or query rewrite as a fix, capture a **before** baseline from the plan cache — not just CPU, but elapsed time and logical reads too (CPU time ≠ wall-clock elapsed time; a query can be I/O-bound with low CPU but high elapsed time):
+
+```sql
+SELECT
+    qs.execution_count,
+    qs.total_elapsed_time / 1000.0 AS total_elapsed_ms,
+    qs.total_elapsed_time / qs.execution_count / 1000.0 AS avg_elapsed_ms_per_exec,
+    qs.total_worker_time / qs.execution_count / 1000.0 AS avg_cpu_ms_per_exec,
+    qs.total_logical_reads / qs.execution_count AS avg_logical_reads_per_exec,
+    qs.last_execution_time,
+    qs.creation_time
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
+WHERE st.text LIKE '%<table/column signature>%'
+ORDER BY qs.total_worker_time DESC;
+```
+
+After applying an index (or before handing a rewritten query to Dev), **test the actual query with `SET STATISTICS IO ON`** against real data — not just theory. Grab a real value for each search parameter first (e.g. `SELECT TOP 1 ... WHERE <col> IS NOT NULL`), then run the query being validated, comparing logical reads per table to the baseline. For a query with multiple branches (e.g. an `OR`, or a proposed `UNION` rewrite), test each branch in isolation with a real value — don't assume a shared index helps every branch equally. **Confirmed 2026-09-21 (GITIN-2074): an index alone showed zero improvement while the query's `OR` shape remained (still ~104,970 logical reads, matching the pre-index baseline, even on plans freshly compiled after the index existed) — only removing the `OR` in an isolated test proved the index worked fine on its own (104,970 → 4 logical reads for the same `CardNumber` value).** Re-running freshly-compiled plan-cache stats after the change (not just the manual test) also helps rule out "stale cached plan" as an alternative explanation for no improvement.
+
+**Add the before/after comparison to `ops.md`**, not just `investigation.md` — as a `Hallazgo` (if it changes the diagnosis) or in `Acciones propuestas` (if it validates a fix). A logical-reads comparison translates directly into a PM-facing before/after table too — describe it as "how much of the table the database has to check," not "logical reads" (keep the PM-email no-jargon/no-code conventions from `loyalty-sre-output`).
 
 ## Capture Tables
 
@@ -18,8 +41,9 @@ Identify the query responsible for a database event given a time window.
 | `PNSSRL_AuditSysprocesses` | `PNSSRL_AuditoriaSysProcesses` | Full sysprocesses snapshot — primary source for CPU investigation |
 | `PNSSRL_TempdbProc` | `PNSSRL - Captura_TEMPDB` | Sessions with tempdb usage + query text |
 | `PNSSRL_CapturaQuery` | `PNSSRL_CapturaQuery` | Execution count + last execution time for Query078 |
-| `PNSSRL_Usage_CpuMemory` | *(feeder disabled)* | CPU/memory — not receiving new data |
-| `PNSSRL_DetallesEjecucionTablasModulos` | `PNSSRL_MantenimientoModulos` | Index maintenance execution detail |
+| `PNSSRL_Usage_CpuMemory` | *(feeder disabled)* | CPU/memory — confirmed 2026-09-19: table is completely empty (0 rows, `MAX(fecha_hora_captura)` NULL), not just stale |
+| `PNSSRL_DetallesEjecucionTablasModulos` | `PNSSRL_MantenimientoModulos` | Index maintenance execution detail — per-table/index `filas`, `fragmentacion`, `ejecucion`/`fin_reindexado`/`fin_indexdefrag`/`fin_ue` timestamps. `fin_reindexado` set = REBUILD ran; `fin_indexdefrag` set = REORGANIZE ran; neither set = skipped (fragmentation below threshold) |
+| `PNSSRL_TablasModulos` | *(config, not a capture table)* | Per-table control row for `PNSSRL_MantenimientoModulos` — `indexado`/`defragmentacion`/`habilitado` flags, one row per table (whole-table granularity, no per-index or per-partition scope). `PNSSRL_MantenimientoModulos` itself takes `@base, @modulo, @tabla, @fillfactor` params (readable via `sys.parameters` even though the procedure body is `WITH ENCRYPTION`) |
 
 Retention: **90 days** (except `PNSSRL_DetallesEjecucionTablasModulos`: 20 days).
 
@@ -63,6 +87,14 @@ When a DB-host CPU/OS-level question (Windows Update, Windows Defender, Schedule
 ```
 Treat the returned hostname as the ground truth for which host the rest of that command's output describes — don't rely on which host you *intended* to target. If the user hasn't confirmed the hostname recently in the conversation, ask before trusting new output, especially when switching between checking `SFCG-DB01` (the SQL Server engine) vs. `SFCG-TO-01` (TaskOperatorService, hosts its own `\SmartFran\` Scheduled Task folder — see `loyalty/docs/infrastructure.md`).
 
+## Source Code Reference — check before concluding "no config exists"
+
+When a question is about **scheduling/recurrence behavior or business logic** (not raw SQL Server internals), DB schema/data alone can lead to a confident-but-wrong "no lever exists" conclusion — check `loyalty/repo/dev-src-sol-smartloyalty/` (local read-only source clone, see `loyalty/docs/infrastructure.md` → "Source Code Reference") **early**, not as a last resort.
+
+**Confirmed incident (GITIN-2036, 2026-09-14):** investigating why a `Sch.Job` campaign task ran 24/7 with no quiet hours, the claim "no way to reschedule/pause these jobs at the DB config level" was written into a doc based on `Sch.Job`'s own columns alone (no recurrence-interval column there) — and had to be corrected **twice** before finally being resolved: first when `Sch.Task.TimeTableId` was noticed pointing to an unexamined `Sch.TimeTable` config table (real `FrecuencyType`/`FrecuencyInterval` columns existed — DB permission denied on first read), then fully once the actual scheduling engine source (`Front/TaskOperatorService/TaskOperatorService.cs`) was read directly, which definitively answered both the interval question and a related "can two schedule rows coexist" question that the DB schema alone could not answer with any confidence. The same session also resolved a real vs. duplicate point-crediting concern by reading `Query084-sql.xml` directly rather than inferring behavior from watermark columns.
+
+**Rule of thumb**: if a DB-only investigation is about to conclude "not possible" / "no config for that" regarding recurrence, business rules, or idempotency — grep the local repo clone for the relevant class/query name (often visible in `TaskEvent`/exception stack traces, e.g. `SmartFran.Solution.SmartLoyalty.Service.MktCampaignContext.MktAsignationPointActionService`) before writing that conclusion down. Note: some namespaces (e.g. `SmartFran.Business.Schedule.*`) live in a shared library **not present** in this clone — if a grep comes up empty, that's a real gap to flag honestly, not proof the behavior doesn't exist.
+
 ## Known Infrastructure
 
 ### Application servers
@@ -85,7 +117,7 @@ Treat the returned hostname as the ground truth for which host the rest of that 
 |---|---|---|---|
 | `SMARTIT\itservices` | Windows domain | All app servers | cross-role (not audited) |
 | `sfsqlusr` | SQL login | TaskOperatorService (SFCG-TO-01) | `db_owner`, `db_securityadmin` ⚠️ |
-| `sfsqlusrit` | SQL login | QA / SSMS (LUCAS-KIUVI) | `db_owner`, `db_securityadmin` ⚠️ |
+| `sfsqlusrit` | SQL login | QA / SSMS (LUCAS-KIUVI) | `db_datareader` — confirmed 2026-09-19, no longer over-privileged (previously `db_owner`/`db_securityadmin`) |
 | `NT SERVICE\SQLSERVERAGENT` | Windows service | SQL Agent jobs | system |
 
-⚠️ Both over-privileged.
+⚠️ `sfsqlusr` still over-privileged (confirmed 2026-09-19).

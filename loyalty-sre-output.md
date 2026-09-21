@@ -46,13 +46,13 @@ One paragraph — the best current explanation (fraud mechanism, entry point, ac
 - ...
 ```
 
-Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language.
+Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Exception: a `## Team Only` section, if present, never gets promoted into `ops.md` — see root `CLAUDE.md` → "Investigation Files (cross-project)".
 
 ## Ops Events File (`ops-events.md`)
 
 Append-only work journal. One entry per meaningful action: investigation step, query result, finding, status update, or follow-up. Never edit past entries.
 
-**Voice:** first person throughout, pretérito perfecto — Dante narrating his own work ("confirmé", "detecté", "extraje"). Never third person ("el usuario pidió", "el usuario confirmó") and never impersonal ("se ha confirmado"). This applies even when narrating a request or a fact Dante provided in conversation — write it as his own action or finding, not as something reported to/by an external "usuario". Facts about external events (e.g. a VM restart) stay factual/passive if Dante didn't perform them himself (`se reinició la VM`, not `reinicié la VM`) — only the investigation actions are first person. Also never frame a decision/pivot as receiving an order from an external party ("he recibido la indicación de...", "a pedido de...") — that still implies a commander/executor hierarchy even without naming "el usuario". State the decision as a direct fact/action instead.
+**Voice:** first person throughout, **pretérito perfecto simple** — Dante narrating his own work ("confirmé", "detecté", "extraje"). This is a deliberate, settled divergence from `sp-sre-output`/`ope-sre-output`, which use the compound tense ("he confirmado") — loyalty stays simple past (confirmed 2026-09-21, resolving the discrepancy `voice-check.md` used to flag as an open question). Never third person ("el usuario pidió", "el usuario confirmó") and never impersonal ("se ha confirmado"). This applies even when narrating a request or a fact Dante provided in conversation — write it as his own action or finding, not as something reported to/by an external "usuario". Facts about external events (e.g. a VM restart) stay factual/passive if Dante didn't perform them himself (`se reinició la VM`, not `reinicié la VM`) — only the investigation actions are first person. Also never frame a decision/pivot as receiving an order from an external party ("he recibido la indicación de...", "a pedido de...") — that still implies a commander/executor hierarchy even without naming "el usuario". State the decision as a direct fact/action instead.
 
 **Mandatory check:** after every Edit/Write to `ops-events.md`, invoke `/voice-check` on that file before treating the entry as done. Recalling this rule from memory alone has repeatedly failed to catch violations — only the mechanized grep in `voice-check.md` has.
 
@@ -71,6 +71,8 @@ All SQL queries run during an investigation or fix must be saved to a `.sql` fil
 | # | Query | Propósito |
 |---|---|---|
 | Q1 | Short name | One-line description of what the query does |
+
+Every query's real result set belongs in the event's `data/` directory (redirected by the query itself, or persisted by Claude when the user pastes it into chat instead) — see root `CLAUDE.md` → "Command/Query Output — Persist as Evidence".
 
 For DBA investigations, trace query text comes from `PNSSRL_AuditSysprocesses.comando_ejecutado` and `PNSSRL_TempdbProc.Query_Text` — save those to `queryXXX.sql` as named in `dba-investigation`.
 
@@ -180,6 +182,6 @@ Use exactly these sections in this order:
 
 **Archivos de evidencia** — table with columns `Archivo` and `Contenido`. List all files under `events/YYYYMMDD_fraude_evidencia/`.
 
-**Hallazgos secundarios** — optional section for findings outside the primary fraud scope.
+**Hallazgos secundarios** — optional section for findings outside the primary fraud scope. Must be findings about the system/incident under investigation — never a bug found in a tool or script used to *investigate* it. Tooling bugs aren't event findings; they don't belong in the ticket at all.
 
 - Do not include personal data (names, DNIs) in the ticket body — reference the CSV files instead.

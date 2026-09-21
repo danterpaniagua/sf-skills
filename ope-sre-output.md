@@ -51,7 +51,7 @@ One paragraph — the best current explanation, stated as current belief, not fi
 - ...
 ```
 
-Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Findings that were ruled out along the way don't appear in the ticket at all unless they're independently useful context (e.g. ruling out the WAF as a cause is worth stating in the ticket; the fact that three different VM-reactivation theories were tried before the right one is not).
+Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Findings that were ruled out along the way don't appear in the ticket at all unless they're independently useful context (e.g. ruling out the WAF as a cause is worth stating in the ticket; the fact that three different VM-reactivation theories were tried before the right one is not). Exception: a `## Team Only` section, if present, never gets promoted into `ops.md` — see root `CLAUDE.md` → "Investigation Files (cross-project)".
 
 ## Commands and Scripts in Tickets
 
@@ -151,9 +151,11 @@ Use exactly these sections in this order:
 |---|---|---|
 | C1 | | |
 
+Every command's real output belongs in the event's `data/` directory (redirected by the command itself, or persisted by Claude when the user pastes it into chat instead) — see root `CLAUDE.md` → "Command/Query Output — Persist as Evidence". This table references those files, it never inlines their content.
+
 **Acciones propuestas** — numbered list of actions taken or to be taken, each with outcome if completed. Section is always titled "Acciones propuestas" — never "Acciones requeridas".
 
-**Hallazgos secundarios** — optional section for findings outside the primary scope that warrant follow-up.
+**Hallazgos secundarios** — optional section for findings outside the primary scope that warrant follow-up. Must be findings about the system/incident under investigation (e.g. an adjacent misconfiguration found along the way) — never a bug found in a tool or script used to *investigate* the incident (e.g. a fix made to a local report-generation script). Tooling bugs aren't event findings; they don't belong in the ticket at all.
 
 ## Emails to Operations
 
