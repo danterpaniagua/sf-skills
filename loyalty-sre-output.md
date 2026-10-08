@@ -46,7 +46,7 @@ One paragraph — the best current explanation (fraud mechanism, entry point, ac
 - ...
 ```
 
-Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Exception: a `## Team Only` section, if present, never gets promoted into `ops.md` — see root `CLAUDE.md` → "Investigation Files (cross-project)".
+Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. **Written once, not revised incrementally as the investigation continues** — see root `CLAUDE.md` → "Investigation Files (cross-project)" for the full rule and a confirmed incident on this exact ticket type. Exception: a `## Team Only` section, if present, never gets promoted into `ops.md`.
 
 ## Ops Events File (`ops-events.md`)
 
@@ -90,7 +90,7 @@ For DBA investigations, trace query text comes from `PNSSRL_AuditSysprocesses.co
 - "Próximos pasos" includes only actions visible or relevant to PMs (infrastructure changes, service impacts).
 - If the only next steps are internal, omit the section entirely — no explanation needed.
 - **Never flatten hedged findings into certainty.** If the source ticket/investigation calls something circumstantial, proposed-but-undecided, or unconfirmed, the email must keep an equivalent hedge or omit the claim — never state it as settled fact just because the summary is shorter. Applies to causal links, future actions ("vamos a hacer X" means it was actually decided, not merely proposed), and outcomes ("resuelto", "sin impacto") — only state these if something was actually checked at that level, not inferred.
-- May mention the real Jira ticket ID for "more information" once it's confirmed to exist (see root `CLAUDE.md` → "External References") — that's a valid, clickable reference. Never use internal findings/query markers like `(H1)`/`(Q3)` in a PM email, and never a local repo path — neither resolves to anything a PM could open.
+- May mention the real Jira ticket ID for "more information" once it's confirmed to exist (see root `CLAUDE.md` → "External References") — that's a valid, clickable reference. Format as a markdown link, `[TICKET-ID](url)` (e.g. `[GITIN-2042](https://smartit-ar.atlassian.net/browse/GITIN-2042)`), not a bare URL — readable ticket ID as the visible text, full URL underneath. Never use internal findings/query markers like `(H1)`/`(Q3)` in a PM email, and never a local repo path — neither resolves to anything a PM could open.
 
 ### Database issues — exception
 
@@ -109,7 +109,7 @@ PMs are the primary contact with Grido (the client) and need full incident detai
 - Never mention internal remediation, access changes, or security controls.
 - Always attach `05_YYYYMMDD_transferencias_pm.csv` — include it as a reference in the email body.
 - "Próximos pasos" includes only actions visible to PMs (e.g. platform controls, service changes). If the only next steps are internal, omit the section.
-- May mention the real Jira ticket ID for "more information" once confirmed to exist — never internal case/query markers, never a local repo path.
+- May mention the real Jira ticket ID for "more information" once confirmed to exist, formatted as a markdown link `[TICKET-ID](url)` (not a bare URL) — never internal case/query markers, never a local repo path.
 
 Include two summary tables in the email body — **anomalous accounts only**:
 

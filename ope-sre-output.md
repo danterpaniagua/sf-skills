@@ -51,7 +51,7 @@ One paragraph — the best current explanation, stated as current belief, not fi
 - ...
 ```
 
-Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. Findings that were ruled out along the way don't appear in the ticket at all unless they're independently useful context (e.g. ruling out the WAF as a cause is worth stating in the ticket; the fact that three different VM-reactivation theories were tried before the right one is not). Exception: a `## Team Only` section, if present, never gets promoted into `ops.md` — see root `CLAUDE.md` → "Investigation Files (cross-project)".
+Once `Status: converged`, write `ops.md` from this file's final state only — the ticket presents the converged understanding directly, with no "we previously thought X" language. **Written once, not revised incrementally as the investigation continues** — see root `CLAUDE.md` → "Investigation Files (cross-project)" for the full rule. Findings that were ruled out along the way don't appear in the ticket at all unless they're independently useful context (e.g. ruling out the WAF as a cause is worth stating in the ticket; the fact that three different VM-reactivation theories were tried before the right one is not). Exception: a `## Team Only` section, if present, never gets promoted into `ops.md`.
 
 ## Commands and Scripts in Tickets
 
@@ -173,7 +173,7 @@ Every command's real output belongs in the event's `data/` directory (redirected
 - Never mention internal security findings, access reviews, or internal remediation details.
 - "Próximos pasos" includes only actions visible or relevant to PMs. If only internal, omit the section.
 - **Never flatten hedged findings into certainty.** If the source ticket/investigation calls something circumstantial, proposed-but-undecided, or unconfirmed, the email must keep an equivalent hedge or omit the claim — never state it as settled fact just because the summary is shorter. Applies to causal links ("como consecuencia" implies confirmed causation — don't write it if the source only says "consistent with"), future actions ("vamos a hacer X" means it was actually decided, not merely proposed in an action-item list), and outcomes ("resuelto", "sin impacto", "volvió a la normalidad") — only state these if something was actually checked at that level, not inferred from a lower-level signal.
-- May mention the real Jira ticket ID for "more information" once it's confirmed to exist (see root `CLAUDE.md` → "External References") — that's a valid, clickable reference. Never use internal findings/command markers like `(H1)`/`(C3)` in a PM email, and never a local repo path — neither resolves to anything a PM could open.
+- May mention the real Jira ticket ID for "more information" once it's confirmed to exist (see root `CLAUDE.md` → "External References") — that's a valid, clickable reference. Format as a markdown link, `[TICKET-ID](url)` (e.g. `[GITIN-2042](https://smartit-ar.atlassian.net/browse/GITIN-2042)`), not a bare URL — readable ticket ID as the visible text, full URL underneath. Never use internal findings/command markers like `(H1)`/`(C3)` in a PM email, and never a local repo path — neither resolves to anything a PM could open.
 
 ## Language
 
