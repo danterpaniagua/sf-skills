@@ -20,7 +20,7 @@ Each event lives in `loyalty/events/YYYYMMDD_description/`. Files inside are nam
 | `ops.md` | Main ticket / closure report — written in Spanish, only once findings have converged |
 | `ops-events.md` | Running activity log — append-only work journal |
 
-Additional files as needed: `scripts.sql`, `queryXXX.sql`, `email_ops.md`, `email_pm.md`, `transferencias_pm.csv`.
+Additional files as needed: `email_ops.md`, `email_pm.md` at the event root; `scripts/scripts.sql` and `scripts/queryXXX.sql` in the `scripts/` folder; `data/transferencias_pm.csv` and other raw or derived tables in `data/`; generated reports in `outputs/` (event layout: root `CLAUDE.md` → "Investigation Files (cross-project)" → Event folder layout).
 
 ## Investigation File (`investigation.md`)
 
@@ -66,7 +66,7 @@ Descripción del trabajo realizado, hallazgo o estado.
 
 ## SQL Queries in Tickets
 
-All SQL queries run during an investigation or fix must be saved to a `.sql` file in the event subfolder (`scripts.sql`). The ticket body references the file with a brief description table — no inline SQL blocks:
+All SQL queries run during an investigation or fix must be saved to a `.sql` file in the event's `scripts/` folder (`scripts/scripts.sql`). The ticket body references the file with a brief description table — no inline SQL blocks:
 
 | # | Query | Propósito |
 |---|---|---|
@@ -146,6 +146,10 @@ One row per transfer. Columns:
 
 Use exactly these sections in this order:
 
+**Qué pasó** — FIRST section. Bullets with the observable symptoms (what, since when, how much), no cause. `ops.md` is created when the event starts, containing only the title (Jira ID and name), the tags and this section; it is updated only if the symptoms description was wrong. All other sections are added in one pass at convergence.
+
+**No parent/subtask wording in `Qué pasó`** — never write "Subtarea de GITIN-XXXX" / "Subtask of" in the `Qué pasó` section (Jira already shows the parent there). It is fine in `Tabla resumen` (`Ticket Jira` cell). The title is the Jira ID plus the Jira title as given. In `Qué pasó` a parent ticket may be linked only where it is a source of data (e.g. "la ventana de GITIN-2250"). Confirmed on GITIN-2251 (2026-10-20).
+
 **Resumen** — one paragraph: what happened, when, which database/platform.
 
 **Tabla resumen** — key event metadata:
@@ -160,9 +164,9 @@ Use exactly these sections in this order:
 | Resuelto | |
 | Responsable | |
 
-**Causa raíz** — one paragraph explaining the fraud mechanism and entry point.
+**Causa raíz** — one paragraph explaining the fraud mechanism and entry point. If not confirmed the section is just "NA". Point to earlier occurrences (earlier dates, earlier Jira ticket IDs — only IDs that were checked to exist; never local paths) or state that none was identified.
 
-**Hallazgos** — table of detected fraud patterns:
+**Hallazgos** — table of detected fraud patterns. When a finding is a bug in code or a query, include the code right below the table as a sub-section (never personal data):
 
 | # | Hallazgo | Riesgo |
 |---|---|---|
@@ -172,13 +176,9 @@ Use exactly these sections in this order:
 
 **Métricas del evento** — table with columns `Métrica` and `Valor`. Include: investigation window (GMT), transfer count, total points, dominant channel, senders over daily limit, points involved in breaches, receivers with post-event activity, accounts registered by systemic registrar (if applicable).
 
-**Consultas ejecutadas** — reference table pointing to the .sql file (no inline SQL):
+**Acciones Tomadas** — what the SRE already did: table `#`, `Hora` (UTC), `Acción`. Includes monitoring/alert improvements and reverted changes, stated as such. The queries index (query, purpose, output file) lives in `investigation.md`, not in `ops.md`.
 
-| # | Query | Propósito |
-|---|---|---|
-| Q1 | | |
-
-**Acciones propuestas** — numbered list of actions taken or to be taken.
+**Acciones propuestas** — table `#`, `Responsable`, `Acción`, `Estado`. Check each against "Acciones Tomadas": what is already done is not repeated.
 
 **Archivos de evidencia** — table with columns `Archivo` and `Contenido`. List all files under `events/YYYYMMDD_fraude_evidencia/`.
 

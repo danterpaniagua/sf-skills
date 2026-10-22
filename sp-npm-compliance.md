@@ -22,7 +22,7 @@ Read `smartpedidos/docs/cicd.md` first — it has the current confirmed Node ver
 cd <repo-clone-path> && git fetch origin develop --quiet && git status --short --branch
 ```
 
-If it's not on `develop`, stop and flag it rather than reading and reporting from the wrong branch — this is the single most expensive mistake this skill can make (confirmed the hard way, `operations/events/20260910_dependency_best_practices_policy/investigation.md`). **Default to running this check against the latest `develop`, always** — fetch first (as above) and fast-forward (`git pull --ff-only origin develop`) if the local clone is behind, since these are unmodified read-only reference clones with nothing to lose. Only skip the fetch/pull, or target a different branch, if the user explicitly asks for a specific branch/commit instead.
+If it's not on `develop`, stop and flag it rather than reading and reporting from the wrong branch — this is the single most expensive mistake this skill can make (confirmed the hard way, `operations/events/20260910_dependency_best_practices_policy/investigation.md`). **Default to running this check against the latest `develop`, always** — fetch first (as above) and fast-forward (`git pull --ff-only origin develop`) if the local clone is behind, since pulling is allowed in these clones (they are never committed to or pushed, and `--ff-only` stops instead of overwriting diverging or conflicting local work). Only skip the fetch/pull, or target a different branch, if the user explicitly asks for a specific branch/commit instead.
 
 ## Prefer extending existing tooling over reinventing
 

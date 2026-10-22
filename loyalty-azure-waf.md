@@ -153,4 +153,4 @@ az monitor log-analytics query \
 
 ## Output
 
-Findings go to `operations/events/YYYYMMDD_<description>/` per the root `operations/CLAUDE.md` convention (Resumen, Tabla resumen, Causa raíz, Hallazgos, Recursos afectados, Comandos ejecutados, Acciones propuestas) — this skill is diagnostic/read-only and does not write directly to `events/`.
+Findings go to `operations/events/YYYYMMDD_<description>/` per the root `operations/CLAUDE.md` convention (see `ope-sre-output` → "Closure Report Structure": Qué pasó, Resumen, Tabla resumen, Causa raíz, Hallazgos, Acciones Tomadas, Recursos afectados, Acciones propuestas) — this skill is diagnostic/read-only and does not write directly to `events/`.

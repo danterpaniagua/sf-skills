@@ -21,7 +21,8 @@ Same discipline as any PM-facing output, restated here since this command is cro
 - **No code, config, or query snippets of any kind.**
 - Product/service names are fine to use directly (the reader manages that product and knows it by name) — but never internal infrastructure or data-layer names (database/collection names, queue names, resource IDs, internal file/service paths).
 - **Never flatten a hedged finding into certainty.** If the source `investigation.md`/`ops.md` calls something proposed, pending, or unconfirmed, this report must keep an equivalent hedge — "en evaluación," "pendiente de decisión" — never state it as resolved just because the format is short. A short report is exactly where this mistake is easiest to make; being terse is not license to also be more certain than the source material.
-- Only the real Jira ticket ID(s) as references — never a local repo path, never internal markers like `(H1)`/`(C3)`.
+- Only the real Jira ticket ID(s) as references — never a local repo path, never internal markers like `(H1)`/`(C3)`. Every ticket reference is a markdown link, `[GITIN-NNNN](https://smartit-ar.atlassian.net/browse/GITIN-NNNN)`, never a bare ID or URL (updated 2026-10-18).
+- **Voice (updated 2026-10-18):** the report is signed by the person who sends it, so it is written in the first person (`he configurado`, `he reiniciado`). Never attribute the sender's own statements or actions to "SRE" or to "lo informado"; state what was measured and what was not verified.
 
 ## Output sections, in order
 
@@ -29,9 +30,9 @@ Same discipline as any PM-facing output, restated here since this command is cro
 2. **Detectado** — one sentence: what was found.
 3. **Corregido** — one sentence: what's actually fixed, not what's in progress.
 4. **Pendiente** — one sentence: what's left, hedged per the rule above.
-5. **Tabla de cambios** — only components that actually changed, nothing pending: `Proyecto | Componente | Antes | Después`. If nothing has actually changed yet, omit this section entirely rather than leaving it empty or filling it with pending items.
+5. **Tabla de cambios** — only components that actually changed, nothing pending: `Proyecto | Componente | Antes | Después | Ticket`. Every row carries its ticket as a link (several tickets separated by commas); a row with no ticket says `Sin ticket` (updated 2026-10-18). If nothing has actually changed yet, omit this section entirely rather than leaving it empty or filling it with pending items.
 6. **Línea de impacto** — one line on the effect on the relevant operation (order flow, service availability, campaign delivery, etc. — whatever applies to the project), only if something was actually checked at that level, never inferred from a lower-level signal.
-7. **Más información** — the Jira ticket URL(s), not just the bare ID — a PM should be able to click straight through. Nothing else in this line.
+7. **Más información** — the Jira ticket URL(s) as links. **Omit this line when every row of the changes table already carries its ticket** (it would be redundant; user rule, 2026-10-18). Keep it only when there is no changes table or a ticket appears nowhere else besides the subject line.
 8. **Saludo** — plain sign-off, matching the sending project's usual tone (peer-to-peer for Operations, plain for PMs — see each project's own `*-sre-output` skill if one exists).
 
 ## Multiple tickets, one finding

@@ -13,7 +13,7 @@ PedidosYa / Rappi / UberEats / MercadoPago / PediGrido
         ↓  webhook
   platforms-service
         ↓  pushNewToQueue
-  {branchId}_PlatformMessages.fifo  (per-branch, us-east-2)
+  {branchId}_PlatformMessages.fifo  (per-branch; us-east-2 in test/staging, us-east-1 in production as {branchId}PRD_PlatformMessages.fifo)
         ↓  pollFromQueue (parent consumer)
             + up to 3 child consumers (auto-scale at 200 / 400 / 600 depth)
         ↓  setNews → news state transition
@@ -24,7 +24,7 @@ PedidosYa / Rappi / UberEats / MercadoPago / PediGrido
   smartfran.deadletters  (MongoDB)
 ```
 
-**Queue URLs (testing):**
+**Queue URLs (testing, `us-east-2`; production queues are in `us-east-1`: `{branchId}PRD_PlatformMessages.fifo`, `PRD_BranchMessages.fifo`, `MainDeadLetter.fifo`, `DeadLetter.fifo`):**
 - Producer: `https://sqs.us-east-2.amazonaws.com/382381053403/{branchId}_TST_PlatformMessages.fifo`
 - Consumer: `https://sqs.us-east-2.amazonaws.com/382381053403/TST_BranchMessages.fifo`
 - Dead letter: `https://sqs.us-east-2.amazonaws.com/382381053403/DeadLetter.fifo`
@@ -296,6 +296,28 @@ db.logerrors.find({
 - If it's a hung-dependency problem: capacity alone won't fix it — needs a client-side request timeout and (if on a cron) an overlap guard / concurrency cap in the application code. Flag as a `(Dev)` action item, not just `(SRE)`.
 - If the platforms-service self-reported-unhealthy mechanism is implicated, consider whether the `maxCpuLoad` threshold and/or the ALB's `UnhealthyThreshold`/`Interval` need hysteresis added — as configured, a single ~30-60s load blip is sufficient to kill a task and can cascade (fewer tasks → higher load on survivors → more kills).
 - ALB access logs (bucket `prod-alb-concentrador-logs`) do **not** capture the ALB's own health-check requests (`health_check_logs.s3.enabled: false`) — if this pattern recurs, consider enabling that separately before the next incident, since it would directly show pass/fail history instead of requiring the multi-step inference above. **Reminder:** changing ALB attributes writes state on a prod resource — show the destructive-command banner per root `CLAUDE.md` before presenting that command to the user.
+
+---
+
+### F-007 · Consumer stall: oldest-message age above 200 s on PRD_BranchMessages.fifo (platforms-service)
+
+**Symptom:** `ApproximateAgeOfOldestMessage` of `PRD_BranchMessages.fifo` (production, `us-east-1`) goes above 200 s, visible messages climb into the hundreds or thousands, then everything drains within a minute. Seen as a Grafana spike and as the CloudWatch alarm `sendMailOldestMessage`. Not the same as F-005 (slow, sustained depth): here the age rises while sends continue and **received and deleted both fall to 0**.
+
+**Context (GITIN-2211, GITIN-2162; 2026-10-03..10-12):**
+- 12 stalls in 10 days, 2 to 5 minutes each, peak age 238-324 s (all above 200 s; 10 above 250 s; 5 above 300 s). The Lambda scaled the service in all 12, so a stall that ends with no scaling was not observed.
+- Alert chain: alarm `sendMailOldestMessage` (Average, 300 s period, > 25 s) → SNS `Pedidos_Production` → Lambda sets `platform-service-production-service` to 15 desired tasks → Application Auto Scaling steps it back to 5. On 2026-10-11 the age was back to 0 at 22:04 with 15 tasks running, but consumption had resumed at 22:03:00, about 30 s after the scale request and before the new tasks were up; stalls also occurred with 10 tasks (GITIN-2162). More tasks are not expected to remove the stall.
+- Cause: not determined. On 2026-10-11 no delivery platform was slow (consumer-side platform calls were 0 from 21:57:58 to 22:03:00 and latencies were normal before and after; no timeout or communication errors logged).
+
+**Diagnostic steps (copy-paste blocks; save every output under the event's `data/`):**
+1. Per minute, queue `PRD_BranchMessages.fifo`: sent, received, deleted, visible, in-flight, age. A stall is minutes with sent > 0 and deleted = 0. Ready-made: `smartpedidos/events/20261013_sqs-spikes-20261011/scripts-c3.sh` (1-minute window, 10-day episode list) and `scripts-c4.sh` (10-day runs of zero deletions). Request the queue by name, not with `SEARCH` (capped at 500 series), and run `awk` with `LC_ALL=C`.
+2. Graylog (`$SML_GRAYLOG_API_KEY`, see `docs/graylog_infrastructure.md`): `"platforms-service"` per minute across the stall: do the `[PERF/INFO] http_response` consumer-side calls (readyOrder, dispatchOrder, deliveryOrder, viewOrder) drop to 0, and are `duration_ms` values normal per platform before and after? Ready-made: `scripts-c7.sh` (per-minute pull; raw output goes to `detail-*` files).
+3. Tasks: `RunningTaskCount` and `DesiredTaskCount` (`ECS/ContainerInsights`) per minute, and the alarm and Lambda times (`describe-alarm-history`, Lambda `Invocations`). Ready-made: `scripts-c8.sh`.
+4. Compare with the other stalls (same signature across days) before attributing a cause.
+
+**Reading the result:**
+- Consumer calls at 0 with normal platform latencies and no timeout/communication errors → not a slow platform; the consumers stopped together. Escalate to Dev under GITIN-2162; do not scale as the fix.
+- Platform calls present but slow (high `duration_ms` for one platform) → that platform is the delay; treat as F-005 external-API latency.
+- Detection: sent > 0 and deleted = 0 for 2 consecutive minutes matched all 12 stalls and no other run in 10 days (available 2 to 4 minutes before age reaches 250 s); age above 200 s covers all 12.
 
 ---
 

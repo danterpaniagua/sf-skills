@@ -28,10 +28,10 @@ Each ticket lives in `smartpedidos/events/YYYYMMDD_description/`, matching the l
 | File | Purpose |
 |---|---|
 | `investigation.md` | Working notes — English, freely editable, created first (see below) |
-| `ops.md` | Main ticket — written in Spanish, only once findings have converged |
+| `ops.md` | Main ticket — written in Spanish, only once findings have converged; represents the SRE's work in Jira |
 | `ops-events.md` | Running activity log — append-only work journal |
 
-Additional files as needed: `scripts.sh`, `scripts.js`, `email_ops.md`, `email_pm.md`.
+Additional files as needed: `email_ops.md`, `email_pm.md` at the event root; `scripts/scripts.sh` and `scripts/scripts.js` in the `scripts/` folder; raw output in `data/`; generated reports and deliverables in `outputs/` (event layout: root `CLAUDE.md` → "Investigation Files (cross-project)" → Event folder layout).
 
 ## Investigation File (`investigation.md`)
 
@@ -121,9 +121,13 @@ Use exactly these sections in this order:
 
 ### Incident ticket (`dd-mm-yyyy_<service>-<incident>`)
 
-Use exactly these sections in this order:
+`ops.md` represents the SRE's work in Jira. Use exactly these sections in this order:
 
-**Resumen** — one paragraph: what happened, when, which service and collection affected.
+**Qué pasó** — FIRST section. Bullets with the observable symptoms (what, since when, how much), no cause. `ops.md` is created when the event starts, containing only the title (Jira ID and name), the tags and this section; it is updated only if the symptoms description was wrong. All other sections are added in one pass at convergence.
+
+**No parent/subtask wording in `Qué pasó`** — never write "Subtarea de GITIN-XXXX" / "Subtask of" in the `Qué pasó` section (Jira already shows the parent there). It is fine in `Tabla resumen` (`Ticket Jira` cell). The title is the Jira ID plus the Jira title as given. In `Qué pasó` a parent ticket may be linked only where it is a source of data (e.g. "la ventana de GITIN-2250"). Confirmed on GITIN-2251 (2026-10-20).
+
+**Resumen** — one paragraph, written last, after every other section is known: the problem that existed before any work, what was done to make it visible or fixed, and what is still open. Hedge anything not verified.
 
 **Tabla resumen** — key event metadata:
 
@@ -137,32 +141,28 @@ Use exactly these sections in this order:
 | Resuelto | |
 | Responsable | |
 
-**Causa raíz** — one paragraph.
+**Causa raíz** — one paragraph; if the cause is not confirmed, the section is just "NA" (see memory `feedback_ops_root_cause_na`). When a cause is given, point to earlier occurrences of the same symptom (earlier dates, earlier Jira ticket IDs — only IDs that were checked to exist; never local paths) or state that none was identified.
 
-**Hallazgos** — table of findings. Reference log entries, MongoDB collection names, SQS queue names, or error messages. No inline code blocks — reference findings files:
+**Hallazgos** — table of findings. Reference log entries, MongoDB collection names, SQS queue names, or error messages. When a finding is a bug, include the code (file and line, a short fenced block of the faulty code, and the suggested fix) right below the table, as a sub-section. Findings stay about the incident — never about a tool or script used to investigate it:
 
 | # | Hallazgo | Riesgo |
 |---|---|---|
 | H1 | | Alto / Medio / Bajo |
 
-**Recursos afectados** — table of affected services and collections:
+**Acciones Tomadas** — what the SRE already did, same table format as always: `#`, `Hora` (UTC), `Acción`. Includes monitoring/alert/notification improvements (what was added so the problem is visible from now on) and the changes that were reverted, stated as such. Past tense, only what was verified applied.
 
-| Componente | Impacto |
+**Recursos afectados** — table of affected services and components:
+
+| Componente | Estado |
 |---|---|
 | platforms-service | |
 | concentrador-service | |
 
-**Comandos ejecutados** — reference table pointing to the scripts file (no inline code):
+**Acciones propuestas** — table `#`, `Responsable` (Dev / SRE), `Acción`, `Estado`. Before writing it, check each proposal against "Acciones Tomadas": anything already done is not repeated here; what is partly done says so in `Estado` (Pendiente / Por decidir / Hecho).
 
-| # | Comando / Script | Propósito |
-|---|---|---|
-| C1 | | |
+**Hallazgos secundarios** — optional section for findings outside the primary incident scope. Must be findings about the system/incident under investigation — never a tooling/script bug.
 
-Every command's real output belongs in the event's `data/` directory (redirected by the command itself, or persisted by Claude when the user pastes it into chat instead) — see root `CLAUDE.md` → "Command/Query Output — Persist as Evidence". This table references those files, it never inlines their content.
-
-**Acciones propuestas** — numbered list. Each action references the responsible team (Dev / SRE / Infra).
-
-**Hallazgos secundarios** — optional section for findings outside the primary incident scope. Must be findings about the system/incident under investigation — never a bug found in a tool or script used to *investigate* the incident. Tooling bugs aren't event findings; they don't belong in the ticket at all.
+There is no "Comandos ejecutados" section in `ops.md`: the scripts index (script, purpose, output file in `data/`) lives in `investigation.md`. Every command's real output still goes to `data/` (see root `CLAUDE.md` → "Command/Query Output — Persist as Evidence").
 
 ---
 
