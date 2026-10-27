@@ -68,9 +68,16 @@ Cluster: low | medium | high   (Stage 0: N hits · Stage 1: X per 1,000 words ·
 Evidence: line N — "<excerpt>" — sign
 Not counted (ineffective/weak alone): …
 Not checked: …
+Conclusion: <two or three sentences: the cluster level, the signs that weigh most, and what they mean for this text>
+Recommendation: rewrite | do not rewrite — <one-line reason>
 ```
 
 Keep the evidence list short (the strongest ten at most). State what was not checked (for example, the Spanish lists are uncalibrated).
+
+**Always end with the Conclusion and the Recommendation, with or without `--rewrite`, and also when the cluster is low** (a short conclusion is enough then). The recommendation is about the text, not a verdict on who wrote it:
+- **Rewrite** when the cluster is medium or high, or when a few specific lines carry the signs (repeated stock phrases, a doubled statement, inflated or filler wording) that a shorter version would remove without changing the message. Name the lines or phrases the rewrite would change.
+- **Do not rewrite** when the cluster is low, or when the matches are only terms the topic requires, or when a rewrite would risk a hedge, a number or a name (see "Never change…" under Rewrite). Say what would change the recommendation (for example, an external detector reading high).
+- A "low" cluster is not a statement that the text reads as human (see Calibration); say so in the conclusion when it is low. If the user did not pass `--rewrite` and the recommendation is to rewrite, offer to run it; do not write `_v2` unasked.
 
 ## Rewrite (`--rewrite`)
 

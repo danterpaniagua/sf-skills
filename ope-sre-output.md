@@ -161,7 +161,7 @@ There is no "Comandos ejecutados" section in `ops.md`: the scripts index (script
 
 - **Never estimate timelines.**
 - **No code of any kind** in the email body — scripts file carries the detail.
-- Reference the Jira ticket ID — never a local repo path (e.g. `operations/events/...`, `cloud/events/...`). Ask the user for the Jira ID first if not already known (see root `CLAUDE.md` → "External References").
+- Reference the Jira ticket ID — never a local repo path (e.g. `operations/events/...`, `cloud/events/...`). Ask the user for the Jira ID first if not already known (see root `CLAUDE.md` → "External References"). Every ticket reference in the body is a markdown link, `[TICKET-ID](url)` (e.g. `[GITIN-2299](https://smartit-ar.atlassian.net/browse/GITIN-2299)`), never a bare URL or a bare ID; the `Asunto:` line may keep the bare ID. Same format as in "Emails to PMs" below (rule restated here 2026-10-24: an email to Operations written without it used a bare URL).
 - Describe the incident and proposed actions in plain technical language.
 - **Exception for architecture/design proposal emails** (not incident-closure emails): when the email's purpose is to get a peer to evaluate a design trade-off — not to report an incident's status — Mermaid diagrams comparing current vs. proposed flow, and brief `file:line`/controller-name references, are acceptable. The reader needs enough to actually evaluate the trade-off, which plain prose alone often can't carry for an architecture change. The "no code" rule still applies in full to incident-status/closure emails, where the ticket already carries that detail and the email should stay pure narrative.
 
