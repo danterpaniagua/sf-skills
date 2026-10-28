@@ -1,151 +1,148 @@
 # Skill: Cloud Azure Operations
 
-Investigation and remediation support for the SmartFran Cloud platform on Azure: Service Bus, multi-tenant App Services, CosmosDB, and cross-service integrations.
+Investigation and remediation support for the SmartFran Cloud platform on Azure: Service Bus, multi-tenant App Services, CosmosDB and cross-service integrations.
 
 ## Scope
 
-- SmartFran Cloud multi-tenant App Services — franchise onboarding, per-tenant routing/config diagnostics
-- Azure Service Bus — namespaces, topics, DLQ monitoring, action groups
-- CosmosDB — availability, RU consumption
-- Event-driven messaging and cross-service integrations across the SmartFran Cloud stack
+- Multi-tenant App Services: franchise onboarding, per-tenant routing/config diagnostics
+- Service Bus: namespaces, topics, DLQ monitoring, action groups
+- CosmosDB: availability, firewall, RU consumption
+- Event-driven messaging and cross-service integrations
 
-For Azure AD Domain Services, VMs, and NSGs, use `/ope-azure`. For NSG-specific audits on `sfcgnetsec01`, use `/loyalty-azure-nsg`.
+For Azure AD Domain Services, VMs and NSGs use `/ope-azure`; for NSG audits on `sfcgnetsec01`, `/loyalty-azure-nsg`; for the Auth0 permission audit, `/cloud-auth0`.
 
-## Known Infrastructure
+## Known infrastructure
 
-| Resource | Value |
-|---|---|
-| Subscription | SmartIT Cloud (`85c76dea-3304-4310-8656-bf21b28e4f4b`) |
-| SmartFran Cloud shared services RG | `SmartFran.Cloud.PRO` (all shared App Services + Key Vault + App Configuration + Redis + SignalR + Cosmos) |
-| SmartFran Cloud Key Vault | `SmartFran-Cloud-KV-Pro2` |
-| SmartFran Cloud App Configuration | `SmartFran-Cloud-Settings-PRO` |
-| SmartFran Cloud logging VM | `smartfran-graylog-pro` (Graylog, eastus2) |
-| Service Bus namespace | `SmartFran-Cloud-ServiceBus-Grido-PRO` |
-| Service Bus RG | `SmartFran.Cloud.PRO.GRIDO` |
-| Service Bus action group | `Service_Bus_Group` (RG: `SmartFran.Cloud.PRO`) |
+Subscription **SmartIT Cloud** (`85c76dea-3304-4310-8656-bf21b28e4f4b`); shared services RG `SmartFran.Cloud.PRO` (App Services, Key Vault `SmartFran-Cloud-KV-Pro2`, App Configuration `SmartFran-Cloud-Settings-PRO`, Redis, SignalR, Cosmos, logging VM `smartfran-graylog-pro`, eastus2); Service Bus namespace `SmartFran-Cloud-ServiceBus-Grido-PRO` in RG `SmartFran.Cloud.PRO.GRIDO`, action group `Service_Bus_Group` (RG `SmartFran.Cloud.PRO`). Everything else (resource groups, App Services and plans, Function Apps, tenant resolution, Cosmos account names, Auth0, Graylog VM and index sets): **`cloud/docs/infrastructure.md`**. Read it before investigating, and update it (not this file) when a new architecture fact is confirmed.
 
-## Command Constraint
+## Command constraint
 
-> **Read commands** (`az ... show`, `az ... list`, `az ... describe`) — safe to run, no warning needed.
-> **Write/action commands** (`az ... update`, `az ... set`, `az ... delete`, `az ... restart`) — always prefix the block with `⚠️ ACTION — this command modifies Azure state.`
+- **Read commands** (`az ... show`, `list`, `describe`): safe, no warning.
+- **Write/action commands** (`az ... update`, `set`, `delete`, `restart`): prefix the block with `⚠️ ACTION — this command modifies Azure state.`
 
 ---
 
-## SmartFran Cloud — Multi-tenant Franchise Architecture
+## New franchise onboarding / per-tenant 404 diagnostic workflow
 
-Full architecture reference (shared App Services, per-tenant hostname pattern, persistent data isolation, App Insights naming convention): **`cloud/docs/infrastructure.md`** — read it before investigating a new franchise, and update it (not this file) when a new architecture fact is confirmed.
+Tenant resolution is **not** hostname-based at the API layer: it is per request, from the Auth0 JWT `org_id` claim or the `TenantId` header, matched against one App Configuration key, **`organizations`** (JSON array of `{name, orgId, tenantId}`; `tenantId` is a 12-char opaque hash, not the franchise name). Detail: `cloud/docs/infrastructure.md` → "Tenant resolution mechanism".
 
-### New franchise onboarding / per-tenant 404 diagnostic workflow
+**First tell apart the two failure classes:**
+- **Static-content 404** (`manifest.webmanifest`, any `wwwroot/*` asset): a front-end deployment problem of that client project (e.g. `Pos.Wasm`), unrelated to `organizations`.
+- **`ApiTenantException` / `TenantNotAvailable`** (backend): the `organizations` array lacks the tenant, has a malformed id, or the caller's `org_id`/`TenantId` matches nothing.
 
-Verified against source (`repo/SmartFran.Cloud/`, 2026-07-12): tenant resolution is **not** hostname-based at the API layer — it's per-request, from an Auth0 JWT `org_id` claim or a `TenantId` header, matched against a single App Configuration key called **`organizations`** (JSON array of `{name, orgId, tenantId}`). `tenantId` is a 12-char opaque hash, not the franchise name. Full detail: `cloud/docs/infrastructure.md` → "Tenant resolution mechanism".
-
-**First, tell apart the two failure classes** — they need different fixes:
-- **Static content 404** (e.g. `manifest.webmanifest`, any `wwwroot/*` asset) → front-end deployment problem for that specific client project (e.g. `Pos.Wasm`). Has nothing to do with the `organizations` config.
-- **`ApiTenantException` / `TenantNotAvailable`** (backend) → the `organizations` array is missing the tenant, has a malformed id, or the caller's `org_id`/`TenantId` doesn't match anything in it.
-
-1. **Inventory both RGs** — `az resource list -g SmartFran.Cloud.PRO.<TENANT>` (persistent data) and `-g SmartFran.Cloud.PRO` (shared services) — confirm what actually exists.
-2. **Hostname/cert binding** — `az webapp config hostname list --webapp-name <app> -g SmartFran.Cloud.PRO`. If the tenant's hostname isn't `Verified`/`SniEnabled` here, stop — it's a DNS/cert issue, not app config. (This only affects which build is served — it does not affect backend tenant resolution.)
-3. **`organizations` config presence** — read the actual `organizations` key value from App Configuration and check whether the tenant's `name`/`orgId`/`tenantId` triplet is present and well-formed (12 alphanumeric chars). `az appconfig kv list` often needs `--auth-mode login` explicitly.
-4. **Secrets presence** — `az keyvault secret list --vault-name SmartFran-Cloud-KV-Pro2 --query "[].name" -o tsv | grep -i <tenant>`. Also check `ConnectionStrings:TenantConnection_<tenantId>` etc. exist for the resolved `tenantId`, not the franchise name.
-5. **App Insights — get the actual failing request**, don't diagnose from a log-line snippet alone: query the `_new`-suffixed component's `requests`/`dependencies` tables filtered by `resultCode == '404'`. For an `SFC.<Target>` HttpClient failure (`System.Net.Http.HttpClient.Sfc.<Target>.LogicalHandler` in logs), check `dependencies` with `name contains 'Sfc.<Target>'`.
-6. **Before concluding it's tenant-specific: check whether a known-good tenant hits the same error.** A 404 that looks like a WEISS-only onboarding gap can just as easily be an unrelated stale/unapplied deployment affecting the shared App Service for everyone (or everyone who hasn't refreshed a cached client) — confirmed as the actual root cause in the 2026-07-11 case. Don't build the whole remediation around a tenant-config theory until this is ruled out.
+1. **Inventory both RGs**: `az resource list -g SmartFran.Cloud.PRO.<TENANT>` (persistent data) and `-g SmartFran.Cloud.PRO` (shared services).
+2. **Hostname/cert binding**: `az webapp config hostname list`. If the hostname is not `Verified`/`SniEnabled`, stop: a DNS/cert issue, not app config (it only affects which build is served, not backend tenant resolution).
+3. **`organizations` presence**: read the real key value and check the tenant's `name`/`orgId`/`tenantId` triplet is present and well formed (12 alphanumeric chars). `az appconfig kv list` often needs `--auth-mode login`.
+4. **Secrets presence**: `az keyvault secret list ... | grep -i <tenant>`, and that `ConnectionStrings:TenantConnection_<tenantId>` etc. exist for the resolved `tenantId` (not the franchise name).
+5. **App Insights: get the actual failing request**, not a log-line snippet: query the `_new`-suffixed component's `requests`/`dependencies` filtered by `resultCode == '404'`. For an `SFC.<Target>` HttpClient failure (`System.Net.Http.HttpClient.Sfc.<Target>.LogicalHandler` in logs) check `dependencies` with `name contains 'Sfc.<Target>'`.
+6. **Before calling it tenant-specific, check whether a known-good tenant hits the same error.** A WEISS-looking 404 was an unapplied/stale deployment of the shared App Service affecting everyone (the 2026-07-11 root cause). Do not build the remediation around a tenant-config theory until this is ruled out.
 
 ```bash
-# C1: Resources in a franchise's own persistent-data RG
+# C1: resources in a franchise's persistent-data RG
 az resource list --resource-group SmartFran.Cloud.PRO.<TENANT> \
   --query "[].{Name:name, Type:type, Location:location}" --output table
 
-# C2: Resources in the shared services RG
+# C2: resources in the shared services RG
 az resource list --resource-group SmartFran.Cloud.PRO \
   --query "[].{Name:name, Type:type, Location:location}" --output table
 
-# C6: Hostname/cert binding — confirm DNS/TLS layer, per shared app
+# C6: hostname/cert binding per shared app
 az webapp config hostname list --webapp-name <app-name> \
   --resource-group SmartFran.Cloud.PRO --output table
 
-# C7: Read the actual `organizations` value from App Configuration
+# C7: the actual `organizations` value
 az appconfig kv show --name SmartFran-Cloud-Settings-PRO --auth-mode login \
   --key organizations --output json
 
-# C10: Key Vault — confirm tenant DB connection secrets exist
+# C10: Key Vault: tenant DB connection secrets exist
 az keyvault secret list --vault-name SmartFran-Cloud-KV-Pro2 \
   --query "[].name" --output tsv | grep -i <tenant>
 
-# C11: App Insights — the actual failing front-end request (last 24h)
+# C11: App Insights: the failing front-end request (last 24h)
 az monitor app-insights query \
   --app <AppService>_new -g SmartFran.Cloud.PRO \
   --analytics-query "requests | where timestamp > ago(24h) and resultCode == '404' | project timestamp, name, url, resultCode, cloud_RoleInstance | order by timestamp desc | take 50" \
   --output table
 
-# C12: App Insights — dependency (backend HttpClient / SFC.* target) failures
+# C12: App Insights: dependency (backend HttpClient / SFC.* target) failures
 az monitor app-insights query \
   --app <AppService>_new -g SmartFran.Cloud.PRO \
   --analytics-query "dependencies | where timestamp > ago(24h) and resultCode == '404' | project timestamp, name, target, resultCode, data, cloud_RoleInstance | order by timestamp desc | take 50" \
   --output table
 ```
 
+## Other failure classes already solved (details in `cloud/docs/infrastructure.md`)
+
+- **Cosmos `403 Forbidden` / `CosmosException`** on a tenant account: read the account firewall (`az cosmosdb show`: `ipRules`, `networkAclBypass`, `virtualNetworkRules`) against the apps' `possibleOutboundIpAddresses` (GITIN-2083).
+- **Graylog `502` / ingestion stopped:** VM storage and the OpenSearch mount (`fstab`), and the flood-stage `read_only_allow_delete` block (GITIN-2128, "Graylog VM operations").
+- **Sales-PRO crashes (`OutOfMemoryException`):** check `use32BitWorkerProcess` after every deploy (`az webapp config show`).
+- **POS 403 after a release:** scope enforcement on `GET /api/Tenant/{id}` and the PRO Auth0 tenant (GITIN-2134; `/cloud-auth0`).
+
+## Onboarding App Services to Graylog — traps confirmed (GITIN-1794 DEV, GITIN-1834 PRO)
+
+Terraform and pipeline code live in the separate `cloud-graylog` repo (`~/Documentos/git/cloud-graylog/`; its `CLAUDE.md` holds the per-app table). Pattern: Diagnostic Settings → Event Hub `app-logs` → Logstash → Graylog. Events: `cloud/events/20260810_dev-environment-onboarding/`, `20260812_prod-full-onboarding/`.
+
+- **A Diagnostic Setting is a full-replace PUT keyed by `name`.** Applying a new one named like an existing out-of-band Log Analytics setting (`SmartFran.Cloud.PRO.{App}_DiagnosticSettings`) silently overwrote it on 4 of 5 apps; `terraform plan` cannot warn (the old object is not in state). Run `az monitor diagnostic-settings list` per app first; keep both destinations and all 9 log categories in the one object. One survivor (Person) had a leading space in its name.
+- **`workspaceId` is not validated on read.** An existing setting pointed to a subscription that does not resolve (`d6ab1add…`, `SubscriptionNotFound`) and the apply failed with 404; the real workspace is in `85c76dea…`. Confirm with `az monitor log-analytics workspace show --subscription 85c76dea…`.
+- **DEV is RG `SmartFran.Cloud` in `Smart IT - Grido` (`0190fa7d…`), not `SmartFran.Cloud.TEST`** (`SmartIT Cloud`, 2 stopped apps): 33 apps over DEV/DEV2/STG/TEST/POC; scope was the 8 `*-DEV` apps. Terraform needs a second aliased provider for that subscription.
+- **New stream, in this order:** create it with an exact-match rule (`field: name, type: 1`) and `remove_matches_from_default_stream: false`; check with a stream-filtered search that it holds only that app; only then set the flag to `true` (it affects new messages only: a 5-minute check still shows old ones, use a 60-second window). API quirks: `POST /streams` needs `{"entity": {...}}`; `POST /system/indices/index_sets` rejects `can_be_default` and requires non-null `data_tiering`.
+- **`POST /api/authz/shares/entities/{grn}` is not a safe read.** It replaces the grant set: an empty `{}` cleared a share. Always send the full desired `selected_grantee_capabilities` (Everyone = `grn::::builtin-team:everyone`, Viewer = `view`); `GET` returns 405.
+- **Volume after onboarding:** compare by category before blaming the pipeline: Catalog was 86.7 % of messages, `AppServiceConsoleLogs` 44,904 vs `AppServiceHTTPLogs` 280 in 15 minutes (app-level logging verbosity, not traffic).
+
 ---
 
-## Windows App Service — console logs can never reach Graylog via this pipeline (platform limitation, not config)
+## Windows App Service — console logs cannot reach Graylog through this pipeline (platform limitation, not config)
 
-All SmartFran Cloud services share one Serilog pipeline (Console JSON → stdout → `AppServiceConsoleLogs` → Event Hub → Graylog). **This cannot work for Windows App Services (Sales, Pos) at all** — `AppServiceConsoleLogs` isn't a supported/populated Diagnostic Settings category for .NET on Windows (Microsoft only supports it for JavaSE/Tomcat there). Confirmed 2026-08-11 (GITIN-1811), for **Sales-DEV** — full detail in `cloud/docs/infrastructure.md` → "Logging (GSFC-LOG-1)" and `cloud/events/20260810_sales-serilog-console-logs/`. **Linux** App Services (Business, Platform, Person, Admin, Catalog, Orders) work fine — that category *is* supported for containers; don't waste time on any of this for them.
+All services share one Serilog pipeline (Console JSON → stdout → `AppServiceConsoleLogs` → Event Hub → Graylog). **It cannot work for Windows App Services (Sales, Pos):** `AppServiceConsoleLogs` is not supported for .NET on Windows (Microsoft supports it there only for JavaSE/Tomcat). Confirmed on **Sales-DEV** (GITIN-1811); **Linux** App Services (Business, Platform, Person, Admin, Catalog, Orders) work, so do not spend time on this for them. Detail: `cloud/docs/infrastructure.md` → "Logging (GSFC-LOG-1)", `cloud/events/20260810_sales-serilog-console-logs/`.
 
-Don't chase this as a config problem — three real gates (`stdoutLogEnabled`, `applicationLogs.fileSystem`, ANCM stdout buffering under `hostingModel="inprocess"`) were found and fixed, confirmed with real CLEF JSON visible live via Kudu Log Stream, and it *still* never reached Graylog after an hour of real traffic. The category itself doesn't ship data off Windows/.NET App Services, full stop. If asked to investigate this again for Sales/Pos (any environment), the diagnostic commands below are still useful for confirming ANCM capture works locally-in-the-file, but **do not present a `web.config`/Application-Logging fix as a solution** — it isn't one. Resolution needs a dev decision (direct GELF sink in Serilog, or the unconfirmed `AppServiceAppLogs`+`AzureMonitorTraceListener` path, or something else) — see `ops.md` in the event folder.
+Do not chase it as config: three real gates (`stdoutLogEnabled`, `applicationLogs.fileSystem`, ANCM stdout buffering under `hostingModel="inprocess"`) were fixed and the CLEF JSON became visible in Kudu Log Stream, and it still never reached Graylog after an hour of real traffic. Use the commands below only to confirm local capture, and **never present a `web.config`/Application-Logging change as the solution**. Resolution needs a dev decision (a direct Serilog→GELF/Event-Hub sink, as Sales now has, or the unconfirmed `AppServiceAppLogs` + `AzureMonitorTraceListener` path).
 
-`Sales-PRO`/`Pos-PRO` are unverified, separate from DEV, but subject to the same platform limitation if checked — **always confirm which environment before running these commands**, the RG/subscription differ (PRO: `SmartFran.Cloud.PRO`, subscription `SmartIT Cloud` `85c76dea...`; DEV: `SmartFran.Cloud`, subscription `Smart IT - Grido` `0190fa7d...`) and mixing them up wastes a round of diagnosis on the wrong instance.
+`Sales-PRO`/`Pos-PRO` are unverified but subject to the same limitation. **Confirm the environment first:** PRO is RG `SmartFran.Cloud.PRO` in `SmartIT Cloud` (`85c76dea…`); DEV is RG `SmartFran.Cloud` in `Smart IT - Grido` (`0190fa7d…`). Mixing them wastes a round on the wrong instance.
 
 ```bash
-# Set both together — mixing an app name from one environment with the
-# other's RG/subscription silently queries the wrong resource.
+# Set all three together; an app name from one environment with the other's RG/subscription silently queries the wrong resource.
 APP=SmartFran-Cloud-Sales-DEV; RG=SmartFran.Cloud; SUB=0190fa7d-4ccf-4e3d-beb1-323b5780bfc8   # DEV
 # APP=SmartFran-Cloud-Sales-PRO; RG=SmartFran.Cloud.PRO; SUB=85c76dea-3304-4310-8656-bf21b28e4f4b   # PRO
 
-# C1: Read the live web.config via Kudu VFS (AAD token — avoids exposing
-# publishing-credentials passwords via list-publishing-credentials)
+# C1: live web.config via Kudu VFS with an AAD token (avoids publishing-credential passwords)
 TOKEN=$(az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv)
 curl -s -H "Authorization: Bearer $TOKEN" \
   "https://$(echo "$APP" | tr '[:upper:]' '[:lower:]').scm.azurewebsites.net/api/vfs/site/wwwroot/web.config"
 
-# C2: Application Logging (Filesystem) — second gate; must also not be "Off"
-# for the platform to collect the stdout file even if capture is enabled
+# C2: Application Logging (Filesystem); must not be "Off" for the platform to collect the stdout file
 az webapp log show --name $APP --resource-group $RG --subscription $SUB -o json
 ```
 
-Sources: [Azure Web app (Windows) console logs not showing in AppServiceConsoleLogs — Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/2147544/azure-web-app-(window)-asp-net-api-console-logs-ar), [AppServiceAppLogs is now available for ASP .NET apps on Windows](https://azure.github.io/AppService/2020/08/31/AzMon-AppServiceAppLogs.html).
+Sources: Microsoft Q&A "Azure Web app (Windows) console logs not showing in AppServiceConsoleLogs"; Azure App Service blog "AppServiceAppLogs is now available for ASP.NET apps on Windows".
 
 ---
 
-## Azure Service Bus — DLQ Monitoring
+## Service Bus — DLQ monitoring
 
-**Portal:** Service Bus namespace → **Metrics** → metric `Dead-lettered messages`, split by Entity Name (per topic/queue). For prebuilt dashboards: namespace → **Insights**.
+**Portal:** namespace → **Metrics** → `Dead-lettered messages`, split by Entity Name; prebuilt dashboards under the namespace's **Insights**.
 
 ```bash
-# List topics in a namespace
+# topics in the namespace
 az servicebus topic list \
   --namespace-name SmartFran-Cloud-ServiceBus-Grido-PRO \
-  --resource-group SmartFran.Cloud.PRO.GRIDO \
-  --output table
+  --resource-group SmartFran.Cloud.PRO.GRIDO --output table
 
-# List alert rules scoped to the Service Bus namespace
+# alert rules scoped to the namespace
 az monitor metrics alert list \
-  --resource-group SmartFran.Cloud.PRO.GRIDO \
-  --output table \
+  --resource-group SmartFran.Cloud.PRO.GRIDO --output table \
   --query "[].{Name:name, Enabled:enabled, Severity:severity, Criteria:criteria}"
 
-# Show action group receivers
+# action group receivers
 az monitor action-group show \
-  --name Service_Bus_Group \
-  --resource-group SmartFran.Cloud.PRO \
-  --output json
+  --name Service_Bus_Group --resource-group SmartFran.Cloud.PRO --output json
 ```
 
-**DLQ alert rule baseline:** metric `Dead-lettered messages`, threshold `> 0`, aggregation `Total`, evaluation window ≥ 5 min. Narrower windows risk hitting the action group's email rate cap during bursts — see `/ope-azure` → "Azure Monitor — Action Group Email Warnings" for the limits.
+**DLQ alert baseline:** metric `Dead-lettered messages`, threshold `> 0`, aggregation `Total`, window ≥ 5 min; narrower windows risk the action group's email rate cap during bursts (`/ope-azure` → "Azure Monitor — Action Group Email Warnings").
 
 ---
 
 ## Constraints
 
-- Default to read-only commands.
-- Always warn with `⚠️ ACTION` before any command that modifies state.
+- Default to read-only commands; warn with `⚠️ ACTION` before any command that modifies state.
 - Never generate commands that delete resources or force-restart services unless explicitly requested.
-- Output commands as copy-paste blocks. User runs them and pastes results back.
+- Output commands as copy-paste blocks; the user runs them and pastes results back.

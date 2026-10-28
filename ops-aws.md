@@ -14,10 +14,12 @@ PedidosYa / Rappi / UberEats / MercadoPago / PediGrido
   platforms-service
         ↓  pushNewToQueue
   {branchId}_PlatformMessages.fifo  (per-branch; us-east-2 in test/staging, us-east-1 in production as {branchId}PRD_PlatformMessages.fifo)
-        ↓  pollFromQueue (parent consumer)
+        ↓  SmartCloud MessageProcessor polls it, delivers to the branch POS, acks back through a second queue
+  BranchMessages.fifo  (one shared queue; production `PRD_BranchMessages.fifo`)
+        ↓  platforms-service pollFromQueue (parent consumer)
             + up to 3 child consumers (auto-scale at 200 / 400 / 600 depth)
-        ↓  setNews → news state transition
-  BranchMessages.fifo → SmartFran agent (POS terminal)
+        ↓  setNews → news state transition in MongoDB
+  (platforms-service consumes BranchMessages.fifo, per `smartpedidos/docs/infrastructure.md` → "Message flow"; concentrador-service does not)
 
   On failure → DeadLetter.fifo / MainDeadLetter.fifo
         ↓  concentrador-service deadLetterSave() on startup
@@ -246,7 +248,7 @@ db.logerrors.find({
 
 ### F-006 · High CPU / ECS tasks being killed repeatedly (either service)
 
-**Symptom:** Reports of "high CPU" or "health check is killing tasks." Not SQS-specific — this is an ECS/ALB-level pattern. Cluster is `smartfran-pedidos-production` (`us-east-1`); both services sit behind the **same ALB** (`pedidos-concentrador-alb`), different target groups. See `smartpedidos/docs/infrastructure.md` → "Load Balancer / Target Groups" for the current health-check config table — **do not assume both services behave the same way**: concentrador-service's check is a generic, lenient `/` probe (120s timeout / 300s interval) with no app-level health logic in its source; platforms-service's check hits its own `GET /metrics/health-check`, which self-reports HTTP 400 whenever `os.loadavg()[0] > maxCpuLoad` (env, currently `0.7`) — tight ALB threshold (5s timeout / 30s interval / `UnhealthyThreshold: 2`) means a brief CPU blip alone can kill a platforms-service task, but the same blip is very unlikely to kill a concentrador-service task.
+**Symptom:** Reports of "high CPU" or "health check is killing tasks." Not SQS-specific — this is an ECS/ALB-level pattern. Cluster is `smartfran-pedidos-production` (`us-east-1`); both services sit behind the **same ALB** (`pedidos-concentrador-alb`), different target groups. See `smartpedidos/docs/infrastructure.md` → "Load balancer / target groups" for the health-check config table; always pull the live target group, the two services have differed before: concentrador-service's check is a generic, lenient `/` probe (matcher 404, 120s timeout / 300s interval) with no app-level health logic; platforms-service's check is now also `GET /` with matcher 404 (5s timeout / 30s interval / `UnhealthyThreshold: 2`, user-confirmed current, `GITIN-2162`), so it no longer depends on CPU. Until at least 2026-08-05 it was the app's own `GET /metrics/health-check`, which self-reports HTTP 400 whenever `os.loadavg()[0] > maxCpuLoad` (env, `0.7`) and could kill a task on a brief CPU blip (`GITIN-1783`); when it changed is not established. Do not assume a health-check kill from CPU alone: confirm with `stoppedReason`/CloudTrail.
 
 **Diagnostic sequence (in order — later steps depend on earlier output):**
 
@@ -294,7 +296,7 @@ db.logerrors.find({
 **Remediation:**
 - If it's a genuine capacity problem: bump `cpu`/`memory` on the task definition (does not require a code change, just `register-task-definition` + `update-service --force-new-deployment`) — confirmed effective in the 2026-08-05 incident (see `events/20260805_concentrador-platforms-high-cpu-healthcheck/`), CPU utilization dropped from repeated 75-99% maxes to low single digits after a 4x bump.
 - If it's a hung-dependency problem: capacity alone won't fix it — needs a client-side request timeout and (if on a cron) an overlap guard / concurrency cap in the application code. Flag as a `(Dev)` action item, not just `(SRE)`.
-- If the platforms-service self-reported-unhealthy mechanism is implicated, consider whether the `maxCpuLoad` threshold and/or the ALB's `UnhealthyThreshold`/`Interval` need hysteresis added — as configured, a single ~30-60s load blip is sufficient to kill a task and can cascade (fewer tasks → higher load on survivors → more kills).
+- Only if the live target group of platforms-service points at the app's `/metrics/health-check` again (it does not as of `GITIN-2162`), and the self-reported-unhealthy mechanism is implicated, consider whether the `maxCpuLoad` threshold and/or the ALB's `UnhealthyThreshold`/`Interval` need hysteresis added — as configured, a single ~30-60s load blip is sufficient to kill a task and can cascade (fewer tasks → higher load on survivors → more kills).
 - ALB access logs (bucket `prod-alb-concentrador-logs`) do **not** capture the ALB's own health-check requests (`health_check_logs.s3.enabled: false`) — if this pattern recurs, consider enabling that separately before the next incident, since it would directly show pass/fail history instead of requiring the multi-step inference above. **Reminder:** changing ALB attributes writes state on a prod resource — show the destructive-command banner per root `CLAUDE.md` before presenting that command to the user.
 
 ---
@@ -309,7 +311,7 @@ db.logerrors.find({
 - Cause: not determined. On 2026-10-11 no delivery platform was slow (consumer-side platform calls were 0 from 21:57:58 to 22:03:00 and latencies were normal before and after; no timeout or communication errors logged).
 
 **Diagnostic steps (copy-paste blocks; save every output under the event's `data/`):**
-1. Per minute, queue `PRD_BranchMessages.fifo`: sent, received, deleted, visible, in-flight, age. A stall is minutes with sent > 0 and deleted = 0. Ready-made: `smartpedidos/events/20261013_sqs-spikes-20261011/scripts-c3.sh` (1-minute window, 10-day episode list) and `scripts-c4.sh` (10-day runs of zero deletions). Request the queue by name, not with `SEARCH` (capped at 500 series), and run `awk` with `LC_ALL=C`.
+1. Per minute, queue `PRD_BranchMessages.fifo`: sent, received, deleted, visible, in-flight, age. A stall is minutes with sent > 0 and deleted = 0. Ready-made: `smartpedidos/events/20261013_gitin2211-sqs-spikes-20261011/scripts-c3.sh` (1-minute window, 10-day episode list) and `scripts-c4.sh` (10-day runs of zero deletions). Request the queue by name, not with `SEARCH` (capped at 500 series), and run `awk` with `LC_ALL=C`.
 2. Graylog (`$SML_GRAYLOG_API_KEY`, see `docs/graylog_infrastructure.md`): `"platforms-service"` per minute across the stall: do the `[PERF/INFO] http_response` consumer-side calls (readyOrder, dispatchOrder, deliveryOrder, viewOrder) drop to 0, and are `duration_ms` values normal per platform before and after? Ready-made: `scripts-c7.sh` (per-minute pull; raw output goes to `detail-*` files).
 3. Tasks: `RunningTaskCount` and `DesiredTaskCount` (`ECS/ContainerInsights`) per minute, and the alarm and Lambda times (`describe-alarm-history`, Lambda `Invocations`). Ready-made: `scripts-c8.sh`.
 4. Compare with the other stalls (same signature across days) before attributing a cause.
